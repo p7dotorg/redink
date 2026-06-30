@@ -68,4 +68,6 @@ builder.add_edge("contradiction_map", "blind_spot")
 builder.add_edge("blind_spot", "synthesize")
 builder.add_edge("synthesize", END)
 
-graph = builder.compile()
+graph = builder.compile(
+    interrupt_before=["reviewer", "figure_reviewer", "synthesize"],
+)
