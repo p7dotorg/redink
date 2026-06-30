@@ -26,6 +26,7 @@ Environment (set in .env or shell):
 
 SEVERITY_EMOJI = {"critical": "🔴", "major": "🟡", "minor": "🔵"}
 SEVERITY_ORDER = {"critical": 0, "major": 1, "minor": 2}
+PERSONA_LABEL = {"skeptic": "SKEPTIC", "practitioner": "PRACTITIONER", "academic": "ACADEMIC"}
 
 
 def format_report(verdict) -> str:
@@ -36,8 +37,16 @@ def format_report(verdict) -> str:
     lines.append("=" * 60)
     lines.append(f"\n{verdict.summary}\n")
     lines.append(f"Críticos: {verdict.critical_count}  |  Maiores: {verdict.major_count}  |  Menores: {verdict.minor_count}")
+
+    # High-confidence issues (consensus)
+    if verdict.high_confidence_issues:
+        lines.append(f"\n🎯 CONSENSO (alta confiança):")
+        for issue in verdict.high_confidence_issues[:4]:
+            lines.append(f"   • {issue}")
+
     lines.append("")
 
+    # Findings por dimensão + persona
     sorted_findings = sorted(verdict.findings, key=lambda f: SEVERITY_ORDER.get(f.severity, 9))
     current_dim = None
     for f in sorted_findings:
@@ -46,9 +55,33 @@ def format_report(verdict) -> str:
             lines.append(f"\n── {f.dimension.upper()} " + "─" * (40 - len(f.dimension)))
 
         emoji = SEVERITY_EMOJI.get(f.severity, "⚪")
-        lines.append(f"\n{emoji} [{f.severity.upper()}] {f.issue}")
+        persona = PERSONA_LABEL.get(getattr(f, "persona", ""), "")
+        conf = getattr(f, "confidence", 5)
+        conf_str = f" [conf:{conf}/10]" if conf != 5 else ""
+        lines.append(f"\n{emoji} [{f.severity.upper()}][{persona}]{conf_str} {f.issue}")
         lines.append(f"   Evidência: {f.evidence}")
         lines.append(f"   Sugestão:  {f.suggestion}")
+
+    # Contradiction map
+    c_map = getattr(verdict, "contradiction_map", None)
+    if c_map and c_map.contradictions:
+        lines.append(f"\n\n── CONTRADICTION MAP " + "─" * 38)
+        for c in c_map.contradictions[:4]:
+            sig = {"high": "🔴", "medium": "🟡", "low": "🔵"}.get(c.significance, "")
+            lines.append(f"\n{sig} [{c.dimension}] {c.persona_a} vs {c.persona_b}")
+            lines.append(f"   A: {c.claim_a}")
+            lines.append(f"   B: {c.claim_b}")
+        if c_map.most_disputed_dimension:
+            lines.append(f"\n⚡ Dimensão mais disputada: {c_map.most_disputed_dimension}")
+
+    # Blind spots
+    b_spots = getattr(verdict, "blind_spots", None)
+    if b_spots and b_spots.topics_not_covered:
+        lines.append(f"\n\n── BLIND SPOTS (nenhum revisor mencionou) " + "─" * 18)
+        for topic in b_spots.topics_not_covered[:3]:
+            lines.append(f"   ⬡ {topic}")
+        if b_spots.highest_priority:
+            lines.append(f"\n   ⚠️  Mais crítico: {b_spots.highest_priority}")
 
     lines.append("\n" + "=" * 60)
     return "\n".join(lines)
@@ -80,7 +113,14 @@ def main():
     print(f"\np7review: {display_name} ({len(paper_text)} chars)")
     print("Classificando paper...")
 
-    result = graph.invoke({"paper": paper_text, "findings": [], "classification": None, "verdict": None})
+    result = graph.invoke({
+        "paper": paper_text,
+        "findings": [],
+        "classification": None,
+        "contradiction_map": None,
+        "blind_spots": None,
+        "verdict": None,
+    })
 
     clf = result["classification"]
     print(f"Área: {clf.area} | Tipo: {clf.paper_type}")
