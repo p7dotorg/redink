@@ -10,13 +10,14 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.types import Send
 
 from paper.schemas import Classification, Finding, Verdict, ContradictionMap, BlindSpot
-from paper.nodes import classify, reviewer, figure_reviewer, contradiction_map, blind_spot, synthesize
+from paper.nodes import fetch_paper, classify, reviewer, figure_reviewer, contradiction_map, blind_spot, synthesize
 
 PERSONAS = ["skeptic", "practitioner", "academic"]
 
 
-class ReviewState(TypedDict):
-    paper: str
+class ReviewState(TypedDict, total=False):
+    paper: str                                        # paper text — set this OR github_url
+    github_url: str                                   # GitHub repo URL — fetch_paper will pull README
     classification: Optional[Classification]
     findings: Annotated[list[Finding], operator.add]
     contradiction_map: Optional[ContradictionMap]
@@ -58,6 +59,7 @@ def route_to_reviewers(state: ReviewState) -> list[Send]:
 
 
 builder = StateGraph(ReviewState, config_schema=ReviewConfig)
+builder.add_node("fetch_paper", fetch_paper)
 builder.add_node("classify", classify)
 builder.add_node("reviewer", reviewer)
 builder.add_node("figure_reviewer", figure_reviewer)
@@ -65,7 +67,8 @@ builder.add_node("contradiction_map", contradiction_map)
 builder.add_node("blind_spot", blind_spot)
 builder.add_node("synthesize", synthesize)
 
-builder.add_edge(START, "classify")
+builder.add_edge(START, "fetch_paper")
+builder.add_edge("fetch_paper", "classify")
 builder.add_conditional_edges("classify", route_to_reviewers, ["reviewer", "figure_reviewer"])
 builder.add_edge("reviewer", "contradiction_map")
 builder.add_edge("figure_reviewer", "contradiction_map")
@@ -76,3 +79,4 @@ builder.add_edge("synthesize", END)
 graph = builder.compile(
     interrupt_before=["reviewer", "figure_reviewer", "synthesize"],
 )
+graph_runner = builder.compile()  # no interrupts — for CLI and testing

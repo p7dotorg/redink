@@ -3,6 +3,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
 
+from paper.graph import graph_runner
+
 VERSION = "0.1.0"
 
 HELP = """\
@@ -99,10 +101,12 @@ def main():
         sys.exit(0)
 
     target = args[0]
-
+    github_url, paper_text = None, None
     if target == "-":
         paper_text = sys.stdin.read()
         display_name = "stdin"
+    elif target.startswith("https://"):
+        github_url, display_name = target, target.rsplit("/", 1)[-1]
     else:
         path = Path(target)
         if not path.exists():
@@ -110,16 +114,15 @@ def main():
             sys.exit(1)
         paper_text = path.read_text(encoding="utf-8")
         display_name = path.name
-    print(f"\np7review: {display_name} ({len(paper_text)} chars)")
+
+    input_state = {"github_url": github_url} if github_url else {"paper": paper_text}
+    print(f"\np7review: {display_name}")
     print("Classificando paper...")
 
-    result = graph.invoke({
-        "paper": paper_text,
-        "findings": [],
-        "classification": None,
-        "contradiction_map": None,
-        "blind_spots": None,
-        "verdict": None,
+    result = graph_runner.invoke({
+        **input_state, "findings": [],
+        "classification": None, "contradiction_map": None,
+        "blind_spots": None, "verdict": None,
     })
 
     clf = result["classification"]
