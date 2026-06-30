@@ -1,7 +1,8 @@
 """LangGraph node implementations — STORM-enhanced multi-persona reviewer."""
 import os
+import re
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 
 from paper.prompts import (
@@ -13,8 +14,35 @@ from paper.schemas import (
     Classification, Finding, FindingsList, Verdict,
     ContradictionMap, BlindSpot,
 )
-from paper.tools import check_citation, find_related_work
+from paper.tools import REVIEWER_TOOLS, extract_figures
 from paper.paper7 import paper7_get
+
+
+_ARXIV_ID_RE = re.compile(r"(?:arXiv[:/])?(\d{4}\.\d{4,5})(?:v\d+)?", re.IGNORECASE)
+
+
+def _extract_arxiv_id(text: str) -> str | None:
+    """Pull the first arXiv ID (YYMM.NNNNN) from paper text or metadata header."""
+    m = _ARXIV_ID_RE.search(text[:2000])
+    return m.group(1) if m else None
+
+
+_TOOL_MAP = {t.name: t for t in REVIEWER_TOOLS}
+
+
+def _tool_loop(model_with_tools, messages: list, max_rounds: int = 5) -> str:
+    """Run a tool-calling loop until the model stops calling tools or max_rounds hit."""
+    response = None
+    for _ in range(max_rounds):
+        response = model_with_tools.invoke(messages)
+        messages.append(response)
+        if not getattr(response, "tool_calls", None):
+            break
+        for tc in response.tool_calls:
+            tool = _TOOL_MAP.get(tc["name"])
+            result = tool.invoke(tc["args"]) if tool else f"Unknown tool: {tc['name']}"
+            messages.append(ToolMessage(content=str(result), tool_call_id=tc["id"]))
+    return response.content if response else ""
 
 
 def _make_model(model_env_key: str, default: str, structured_schema=None, max_tokens: int = None):
@@ -31,10 +59,26 @@ def _make_model(model_env_key: str, default: str, structured_schema=None, max_to
     return m.with_structured_output(structured_schema) if structured_schema else m
 
 
+_CLASSIFY_SYSTEM = """\
+Você é um especialista em análise de papers acadêmicos. Classifique com precisão.
+
+Regras para o campo dimensions — inclua SEMPRE:
+  citations, methodology, novelty, writing
+
+Inclua também quando aplicável:
+  statistics      — se houver tabelas, métricas, p-values, benchmarks ou comparações numéricas
+  reproducibility — se for ML / computação / software
+  ethics          — se envolver dados de pessoas ou aplicações de alto risco
+  figures         — se o paper tiver gráficos, curvas de aprendizado, figuras de resultados,
+                    plots de comparação ou qualquer resultado apresentado visualmente
+                    (ML, CV, medicina, física experimental, economia empírica: SEMPRE inclua figures)
+"""
+
+
 def classify(state):
     model = _make_model("CLASSIFY_MODEL", "qwen/qwen3-8b", Classification)
     result = model.invoke([
-        SystemMessage(content="Você é um especialista em análise de papers acadêmicos. Classifique com precisão."),
+        SystemMessage(content=_CLASSIFY_SYSTEM),
         HumanMessage(content=f"Classifique este paper:\n\n{state['paper']}"),
     ])
     return {"classification": result}
@@ -47,54 +91,55 @@ def reviewer(state):
     paper = state["paper"]
 
     system_prompt = build_reviewer_prompt(dim, persona)
-    extra_context = ""
-
-    if dim == "citations":
-        results = []
-        for ref in clf.citations[:15]:
-            r = check_citation(ref)
-            line = f"Referência: {ref}\nStatus: {r['status']} (fonte: {r.get('source','?')})\nDetalhe: {r['details']}"
-            if r["status"] == "found" and r.get("source") == "arXiv":
-                arxiv_id = r["details"].split("]")[0].strip("[") if "[" in r["details"] else ""
-                if arxiv_id:
-                    line += f"\nAbstract: {paper7_get(arxiv_id)[:400]}"
-            results.append(line)
-        extra_context = "\n\nResultados de citações:\n\n" + "\n\n".join(results)
-
-    elif dim == "novelty":
-        query = " ".join(clf.claims[:2])
-        related = find_related_work(query)
-        if related:
-            details = []
-            for r in related[:3]:
-                arxiv_id = r.get("id", "")
-                title = r.get("title", "")
-                if arxiv_id:
-                    abstract = paper7_get(arxiv_id)[:300]
-                    details.append(f"- [{arxiv_id}] {title}\n  {abstract}")
-                else:
-                    details.append(f"- {title} ({r.get('year','')})")
-            extra_context = "\n\nTrabalhos relacionados:\n" + "\n".join(details)
-
     conciseness = "\n\nIMPORTANTE: Máximo 4 findings, cada um com no máximo 3 frases."
-    full_prompt = (
-        f"{system_prompt}\n\n{FINDING_SCHEMA_PROMPT}{conciseness}\n\n"
+    header = (
         f"Área: {clf.area} | Tipo: {clf.paper_type}\n"
-        f"Claims: {'; '.join(clf.claims)}\nPersona: {persona}\n\nPAPER:\n{paper}{extra_context}"
+        f"Claims: {'; '.join(clf.claims)}\nPersona: {persona}"
     )
 
-    analysis_text = run_cli_reviewers(full_prompt)
-    if not analysis_text:
-        model = _make_model("REVIEWER_MODEL", "google/gemini-2.5-flash", max_tokens=3000)
-        response = model.invoke([
-            SystemMessage(content=system_prompt + "\n\n" + FINDING_SCHEMA_PROMPT + conciseness),
-            HumanMessage(content=(
-                f"Área: {clf.area} | Tipo: {clf.paper_type}\n"
-                f"Claims: {'; '.join(clf.claims)}\nPersona: {persona}\n\n"
-                f"PAPER:\n{paper}{extra_context}"
-            )),
-        ])
-        analysis_text = response.content
+    # Tool-calling dimensions — model decides what to look up
+    if dim in ("citations", "novelty"):
+        tool_instructions = {
+            "citations": (
+                "Você tem 3 ferramentas:\n"
+                "• search_papers(query) — busca no arXiv pelo título ou autores da referência\n"
+                "• get_paper(arxiv_id) — lê o abstract de um paper arXiv para confirmar conteúdo\n"
+                "• verify_doi(doi) — confirma publicação via Crossref (para papers fora do arXiv)\n\n"
+                "Estratégia: para cada referência suspeita, tente search_papers primeiro. "
+                "Se não achar e a referência tiver DOI, use verify_doi. "
+                "Verifique no mínimo 5 referências — priorize títulos vagos ou autores desconhecidos."
+            ),
+            "novelty": (
+                "Você tem 3 ferramentas:\n"
+                "• search_papers(query) — busca no arXiv por método, problema ou baseline\n"
+                "• get_paper(arxiv_id) — lê o abstract para comparar com as claims do paper\n"
+                "• verify_doi(doi) — verifica papers de conferências fora do arXiv\n\n"
+                "Estratégia: faça pelo menos 3 buscas com queries diferentes "
+                "(nome do método, problema central, baseline principal). "
+                "Para cada resultado relevante, leia o abstract com get_paper e compare diretamente com as claims."
+            ),
+        }
+        model = _make_model("REVIEWER_MODEL", "google/gemini-2.5-flash", max_tokens=4000)
+        model_with_tools = model.bind_tools(REVIEWER_TOOLS)
+        messages = [
+            SystemMessage(content=f"{system_prompt}\n\n{tool_instructions[dim]}\n\n{FINDING_SCHEMA_PROMPT}{conciseness}"),
+            HumanMessage(content=f"{header}\n\nCitações extraídas: {'; '.join(clf.citations[:20])}\n\nPAPER:\n{paper}"),
+        ]
+        analysis_text = _tool_loop(model_with_tools, messages, max_rounds=6)
+
+    else:
+        full_prompt = (
+            f"{system_prompt}\n\n{FINDING_SCHEMA_PROMPT}{conciseness}\n\n"
+            f"{header}\n\nPAPER:\n{paper}"
+        )
+        analysis_text = run_cli_reviewers(full_prompt)
+        if not analysis_text:
+            model = _make_model("REVIEWER_MODEL", "google/gemini-2.5-flash", max_tokens=3000)
+            response = model.invoke([
+                SystemMessage(content=system_prompt + "\n\n" + FINDING_SCHEMA_PROMPT + conciseness),
+                HumanMessage(content=f"{header}\n\nPAPER:\n{paper}"),
+            ])
+            analysis_text = response.content
 
     structured = _make_model("STRUCTURED_MODEL", "openai/gpt-4o-mini", FindingsList, max_tokens=4000)
     result = structured.invoke([
@@ -116,6 +161,67 @@ def reviewer(state):
             issue="Análise não retornou findings estruturados.",
             evidence=analysis_text[:200],
             suggestion="Revisar manualmente esta dimensão.",
+        )]
+    return {"findings": findings}
+
+
+def figure_reviewer(state):
+    """Vision node — fetches ar5iv figures and runs Gemini 2.5 Flash image analysis."""
+    clf = state["classification"]
+    paper = state["paper"]
+
+    arxiv_id = _extract_arxiv_id(paper)
+    figures = extract_figures(arxiv_id) if arxiv_id else []
+
+    if not figures:
+        return {"findings": [Finding(
+            dimension="figures", persona="skeptic", severity="minor",
+            issue="Figuras não disponíveis para análise visual (paper não está no ar5iv ou não tem figuras).",
+            evidence="ar5iv retornou lista vazia ou paper não tem arXiv ID.",
+            suggestion="Verifique manualmente os gráficos do PDF original.",
+        )]}
+
+    system_prompt = build_reviewer_prompt("figures", "skeptic")
+    conciseness = "\n\nIMPORTANTE: Máximo 4 findings, cada um com no máximo 3 frases."
+
+    vision_content = []
+    for fig in figures:
+        vision_content.append({"type": "image_url", "image_url": {"url": fig["url"]}})
+        if fig["caption"]:
+            vision_content.append({"type": "text", "text": f"[Caption: {fig['caption']}]"})
+
+    vision_content.append({"type": "text", "text": (
+        f"{system_prompt}\n\n{FINDING_SCHEMA_PROMPT}{conciseness}\n\n"
+        f"Área: {clf.area} | Tipo: {clf.paper_type}\n"
+        f"Claims: {'; '.join(clf.claims)}\n\n"
+        f"Analise as {len(figures)} figuras acima. Detecte desonestidade visual, "
+        f"cherry-picking, ausência de barras de erro, eixos truncados, captions enganosas."
+    )})
+
+    model = _make_model("FIGURE_MODEL", "google/gemini-2.5-flash", max_tokens=3000)
+    response = model.invoke([HumanMessage(content=vision_content)])
+    analysis_text = response.content
+
+    structured = _make_model("STRUCTURED_MODEL", "openai/gpt-4o-mini", FindingsList, max_tokens=4000)
+    result = structured.invoke([
+        SystemMessage(content=(
+            "Converta a análise visual em findings estruturados. "
+            "Severity: critical, major ou minor. Máximo 4 findings. "
+            "O campo dimension deve ser sempre 'figures'. "
+            "O campo persona deve ser sempre 'skeptic'."
+        )),
+        HumanMessage(content=f"Dimensão: figures\nPersona: skeptic\n\nAnálise:\n{analysis_text[:5000]}"),
+    ])
+
+    findings = result.findings if isinstance(result, FindingsList) else []
+    for f in findings:
+        f.persona = "skeptic"
+    if not findings:
+        findings = [Finding(
+            dimension="figures", persona="skeptic", severity="minor",
+            issue="Análise visual não retornou findings estruturados.",
+            evidence=analysis_text[:200],
+            suggestion="Revisar figuras manualmente.",
         )]
     return {"findings": findings}
 

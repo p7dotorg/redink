@@ -10,7 +10,7 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.types import Send
 
 from paper.schemas import Classification, Finding, Verdict, ContradictionMap, BlindSpot
-from paper.nodes import classify, reviewer, contradiction_map, blind_spot, synthesize
+from paper.nodes import classify, reviewer, figure_reviewer, contradiction_map, blind_spot, synthesize
 
 PERSONAS = ["skeptic", "practitioner", "academic"]
 
@@ -32,30 +32,38 @@ class ReviewerInput(TypedDict):
 
 
 def route_to_reviewers(state: ReviewState) -> list[Send]:
-    """Fan-out: each dimension × each persona — STORM multi-perspective."""
+    """Fan-out: text dimensions × 3 personas; figures → figure_reviewer (once)."""
     clf = state["classification"]
-    return [
-        Send("reviewer", {
-            "paper": state["paper"],
-            "classification": clf,
-            "dimension": dim,
-            "persona": persona,
-        })
-        for dim in clf.dimensions
-        for persona in PERSONAS
-    ]
+    sends = []
+    for dim in clf.dimensions:
+        if dim == "figures":
+            sends.append(Send("figure_reviewer", {
+                "paper": state["paper"],
+                "classification": clf,
+            }))
+        else:
+            for persona in PERSONAS:
+                sends.append(Send("reviewer", {
+                    "paper": state["paper"],
+                    "classification": clf,
+                    "dimension": dim,
+                    "persona": persona,
+                }))
+    return sends
 
 
 builder = StateGraph(ReviewState)
 builder.add_node("classify", classify)
 builder.add_node("reviewer", reviewer)
+builder.add_node("figure_reviewer", figure_reviewer)
 builder.add_node("contradiction_map", contradiction_map)
 builder.add_node("blind_spot", blind_spot)
 builder.add_node("synthesize", synthesize)
 
 builder.add_edge(START, "classify")
-builder.add_conditional_edges("classify", route_to_reviewers, ["reviewer"])
+builder.add_conditional_edges("classify", route_to_reviewers, ["reviewer", "figure_reviewer"])
 builder.add_edge("reviewer", "contradiction_map")
+builder.add_edge("figure_reviewer", "contradiction_map")
 builder.add_edge("contradiction_map", "blind_spot")
 builder.add_edge("blind_spot", "synthesize")
 builder.add_edge("synthesize", END)

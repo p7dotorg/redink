@@ -1,89 +1,133 @@
-"""Citation verification via Semantic Scholar, Crossref, and arXiv."""
-import time
+"""Tools for paper reviewer — each tool does exactly one thing."""
+import os
+import re
 
 import httpx
+from langchain_core.tools import tool
 
-from paper.paper7 import paper7_search
+from paper.paper7 import paper7_search, paper7_get
 
 
-def _search_semantic_scholar(query: str, timeout: int = 10) -> list[dict]:
-    url = "https://api.semanticscholar.org/graph/v1/paper/search"
-    params = {"query": query, "limit": 3, "fields": "title,authors,year,externalIds"}
+# ---------------------------------------------------------------------------
+# @tool definitions — single responsibility each
+# ---------------------------------------------------------------------------
+
+@tool
+def search_papers(query: str) -> str:
+    """Search arXiv for papers matching a query (title, method name, topic, or author).
+    Use this to find related work, verify if a cited paper exists on arXiv,
+    or discover prior work that challenges the novelty of the paper under review.
+    Returns a list of arXiv IDs and titles."""
+    base = os.getenv("PAPER7_API_URL", "")
+    if base:
+        try:
+            r = httpx.get(f"{base}/api/search", params={"q": query}, timeout=10)
+            if r.status_code == 200:
+                results = r.json()
+                if results:
+                    lines = [f"[{r.get('id', r.get('arxivId', ''))}] {r.get('title', '')}" for r in results[:5]]
+                    return "\n".join(lines)
+        except Exception:
+            pass
+
+    results = paper7_search(query, max_results=5)
+    if not results:
+        return "No papers found on arXiv for this query."
+    return "\n".join(f"[{r['id']}] {r['title']}" for r in results)
+
+
+@tool
+def get_paper(arxiv_id: str) -> str:
+    """Fetch the abstract and metadata of an arXiv paper by its ID (e.g. '2303.08774').
+    Use this after search_papers to read the full abstract and compare claims,
+    methods, or results with the paper under review."""
+    text = paper7_get(arxiv_id)
+    if not text or not text.strip():
+        return f"Paper {arxiv_id} not found on arXiv."
+    return text[:800]
+
+
+@tool
+def verify_doi(doi: str) -> str:
+    """Look up a paper by its DOI in the Crossref database.
+    Use this to verify citations that are NOT on arXiv (Nature, ACM, IEEE, books, etc.)
+    or to confirm publication details (journal, year, authors) for any reference.
+    DOI format: '10.XXXX/...' — strip any 'https://doi.org/' prefix first."""
+    doi = doi.strip().removeprefix("https://doi.org/").removeprefix("http://doi.org/")
     try:
-        r = httpx.get(url, params=params, timeout=timeout)
-        if r.status_code == 429:
-            time.sleep(2)
-            r = httpx.get(url, params=params, timeout=timeout)
-        if r.status_code == 200:
-            return r.json().get("data", [])
-    except Exception:
-        pass
-    return []
+        r = httpx.get(
+            f"https://api.crossref.org/works/{doi}",
+            timeout=10,
+            headers={"User-Agent": "p7-reviewer/0.1 (mailto:review@example.com)"},
+        )
+        if r.status_code == 404:
+            return f"DOI {doi} not found in Crossref — possible hallucinated citation."
+        if r.status_code != 200:
+            return f"Crossref returned {r.status_code} for DOI {doi}."
+        w = r.json().get("message", {})
+        title = (w.get("title") or [""])[0]
+        authors = ", ".join(
+            f"{a.get('given', '')} {a.get('family', '')}".strip()
+            for a in w.get("author", [])[:3]
+        )
+        journal = (w.get("container-title") or [""])[0]
+        year = (w.get("published", {}).get("date-parts") or [[""]])[0][0]
+        return f"FOUND: '{title}' by {authors} — {journal} ({year})"
+    except Exception as e:
+        return f"Error looking up DOI: {e}"
 
 
-def _search_crossref(query: str, timeout: int = 10) -> list[dict]:
-    url = "https://api.crossref.org/works"
-    params = {"query": query, "rows": 3, "select": "title,author,published"}
+# Tools passed to bind_tools() in reviewer nodes
+REVIEWER_TOOLS = [search_papers, get_paper, verify_doi]
+
+
+# ---------------------------------------------------------------------------
+# Figure extraction (vision pipeline — not a LangChain tool)
+# ---------------------------------------------------------------------------
+
+_AR5IV_BASE = "https://ar5iv.labs.arxiv.org/html"
+
+
+def extract_figures(arxiv_id: str, max_figures: int = 6) -> list[dict]:
+    """Fetch ar5iv HTML and extract figure URLs + captions. Returns [{url, caption}]."""
+    url = f"{_AR5IV_BASE}/{arxiv_id}"
     try:
-        r = httpx.get(url, params=params, timeout=timeout,
-                      headers={"User-Agent": "p7-reviewer/0.1 (mailto:review@example.com)"})
-        if r.status_code == 200:
-            return r.json().get("message", {}).get("items", [])
+        r = httpx.get(url, timeout=20, follow_redirects=True,
+                      headers={"User-Agent": "p7-reviewer/0.1"})
+        if r.status_code != 200:
+            return []
     except Exception:
-        pass
-    return []
+        return []
 
+    html = r.text
+    figures = []
 
-def _title_match(ref_lower: str, title: str) -> bool:
-    words = [w for w in title.lower().split() if len(w) > 4]
-    if not words:
-        return False
-    return sum(1 for w in words[:6] if w in ref_lower) >= min(3, len(words))
+    for fig_html in re.findall(r"<figure[^>]*>(.*?)</figure>", html, re.DOTALL | re.IGNORECASE):
+        img_match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', fig_html, re.IGNORECASE)
+        if not img_match:
+            continue
+        src = img_match.group(1)
 
+        if src.endswith(".svg") or "icon" in src.lower():
+            continue
 
-def check_citation(reference: str) -> dict:
-    """Verify a bibliographic reference exists. Returns {status, source, details}."""
-    ref_lower = reference.lower()
+        if src.startswith("http"):
+            img_url = src
+        elif src.startswith("//"):
+            img_url = "https:" + src
+        elif src.startswith("/"):
+            img_url = "https://ar5iv.labs.arxiv.org" + src
+        else:
+            img_url = f"{_AR5IV_BASE}/{arxiv_id}/{src.lstrip('/')}"
 
-    for r in _search_semantic_scholar(reference):
-        title = r.get("title") or ""
-        if _title_match(ref_lower, title):
-            return {"status": "found", "source": "Semantic Scholar",
-                    "details": f"'{title}' ({r.get('year', '')})"}
+        cap_match = re.search(r"<figcaption[^>]*>(.*?)</figcaption>", fig_html, re.DOTALL | re.IGNORECASE)
+        caption = ""
+        if cap_match:
+            caption = re.sub(r"<[^>]+>", " ", cap_match.group(1)).strip()
+            caption = re.sub(r"\s+", " ", caption)[:300]
 
-    for r in _search_crossref(reference):
-        titles = r.get("title", [])
-        title = titles[0] if titles else ""
-        if _title_match(ref_lower, title):
-            return {"status": "found", "source": "Crossref", "details": f"'{title}'"}
+        figures.append({"url": img_url, "caption": caption})
+        if len(figures) >= max_figures:
+            break
 
-    for r in paper7_search(reference):
-        if _title_match(ref_lower, r.get("title", "")):
-            return {"status": "found", "source": "arXiv",
-                    "details": f"[{r['id']}] {r['title']}"}
-
-    is_old = any(str(y) in reference for y in range(1900, 2000))
-    has_google = any(kw in ref_lower for kw in ["google", "ga4", "ads data hub"])
-    if is_old:
-        reason = "Pre-arXiv publication (book/chapter). Check Google Scholar."
-    elif has_google:
-        reason = "Likely Google internal tech report. Cite as technical documentation with URL."
-    else:
-        reason = "Not indexed in arXiv, Semantic Scholar, or Crossref. May be ACM/KDD/WSDM proceedings, tech report, or incorrect citation."
-
-    return {"status": "not_found", "source": "none", "details": reason}
-
-
-def find_related_work(query: str, limit: int = 5) -> list[dict]:
-    """Find related papers via paper7 + Semantic Scholar fallback."""
-    p7 = paper7_search(query, max_results=limit)
-    if p7:
-        return p7
-    results = _search_semantic_scholar(query)
-    return [
-        {"id": r.get("externalIds", {}).get("ArXiv", ""),
-         "title": r.get("title"),
-         "year": r.get("year"),
-         "authors": [a.get("name") for a in r.get("authors", [])[:3]]}
-        for r in results[:limit]
-    ]
+    return figures

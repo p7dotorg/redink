@@ -5,14 +5,16 @@ from pydantic import BaseModel, Field
 class Classification(BaseModel):
     area: str = Field(description="Área acadêmica do paper (ex: Machine Learning, Ciências Sociais, Saúde)")
     paper_type: str = Field(description="Tipo do paper (ex: empírico, teórico, survey, caso de estudo)")
-    dimensions: list[Literal["citations", "methodology", "novelty", "writing", "statistics", "reproducibility", "ethics"]] = Field(
+    dimensions: list[Literal["citations", "methodology", "novelty", "writing", "statistics", "reproducibility", "ethics", "figures"]] = Field(
         description=(
             "Dimensões de revisão a acionar. USE EXATAMENTE esses valores: "
-            "citations, methodology, novelty, writing, statistics, reproducibility, ethics. "
+            "citations, methodology, novelty, writing, statistics, reproducibility, ethics, figures. "
             "Sempre inclua: citations, methodology, novelty, writing. "
             "Inclua statistics se houver análise quantitativa. "
             "Inclua reproducibility se for ML/computação/software. "
-            "Inclua ethics se envolver dados de pessoas."
+            "Inclua ethics se envolver dados de pessoas. "
+            "Inclua figures se o paper mencionar gráficos, experimentos visuais ou resultados em tabelas/figuras — "
+            "especialmente para papers de ML, CV, medicina, ou qualquer paper com avaliação quantitativa visual."
         )
     )
     citations: list[str] = Field(

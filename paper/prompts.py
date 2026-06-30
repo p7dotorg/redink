@@ -53,6 +53,14 @@ DIMENSION_PROMPTS = {
         "Foco em ÉTICA: detecte uso de dados humanos sem menção a consentimento/IRB, "
         "viés nos dados não discutido, conflito de interesse."
     ),
+    "figures": (
+        "Foco em FIGURAS E GRÁFICOS: você está vendo as figuras reais do paper. "
+        "Detecte desonestidade visual: eixo Y truncado para exagerar diferenças, ausência de barras de erro "
+        "em comparações quantitativas, baseline cherry-picked, escala enganosa, curvas que param "
+        "convenientemente antes de mostrar degradação, resultados qualitativos selecionados (cherry-picking), "
+        "caption que afirma mais do que a figura mostra, inconsistência entre legenda e corpo do paper. "
+        "Seja específico: cite o número da figura e o problema exato."
+    ),
 }
 
 DEFAULT_DIMENSION_PROMPT = (
