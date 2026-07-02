@@ -3,8 +3,14 @@ from pydantic import BaseModel, Field
 
 
 class Classification(BaseModel):
-    area: str = Field(description="Área acadêmica do paper (ex: Machine Learning, Ciências Sociais, Saúde)")
-    paper_type: str = Field(description="Tipo do paper (ex: empírico, teórico, survey, caso de estudo)")
+    area: str = Field(description="Área acadêmica do paper em 2-4 palavras (ex: Machine Learning, Ciências Sociais, Saúde Pública)")
+    paper_type: Literal["empirical", "benchmark", "survey", "theoretical", "system", "position"] = Field(
+        description=(
+            "Tipo do paper: empirical=tem experimentos/resultados, benchmark=avalia modelos/sistemas, "
+            "survey=revisão da literatura, theoretical=contribuição teórica, "
+            "system=descreve um sistema/ferramenta, position=argumento/opinião"
+        )
+    )
     dimensions: list[Literal["citations", "methodology", "novelty", "writing", "statistics", "reproducibility", "ethics", "figures"]] = Field(
         description=(
             "Dimensões de revisão a acionar. USE EXATAMENTE esses valores: "
@@ -18,7 +24,12 @@ class Classification(BaseModel):
         )
     )
     citations: list[str] = Field(
-        description="Lista de referências bibliográficas extraídas do paper, cada uma como string completa"
+        description=(
+            "Lista de até 20 referências extraídas da seção References/Bibliografia do paper. "
+            "Formato: 'Autor et al. (ano). Título.' "
+            "NÃO inclua chaves BibTeX (@software, @article, etc.), auto-citações ou DOIs isolados. "
+            "Apenas títulos reais de papers, livros ou artigos citados no texto."
+        )
     )
     claims: list[str] = Field(
         description="Principais afirmações/contribuições do paper (3-7 claims centrais)"
