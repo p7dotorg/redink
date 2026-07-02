@@ -21,10 +21,17 @@ Inclua também quando aplicável:
 """
 
 
+def _classify_excerpt(paper: str) -> str:
+    """Send first 8k + last 3k chars — abstract/intro + references section."""
+    if len(paper) <= 11000:
+        return paper
+    return paper[:8000] + "\n\n[... seções intermediárias omitidas ...]\n\n" + paper[-3000:]
+
+
 def classify(state, config: RunnableConfig = None):
-    model = make_model("CLASSIFY_MODEL", "qwen/qwen3-8b", Classification, max_tokens=800, config=config)
+    model = make_model("CLASSIFY_MODEL", "qwen/qwen3-8b", Classification, max_tokens=1500, config=config)
     result = model.invoke([
         SystemMessage(content=_CLASSIFY_SYSTEM),
-        HumanMessage(content=f"Classifique este paper:\n\n{state['paper']}"),
+        HumanMessage(content=f"Classifique este paper:\n\n{_classify_excerpt(state['paper'])}"),
     ])
     return {"classification": result}

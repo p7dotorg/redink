@@ -66,11 +66,24 @@ def _structured_findings(
     return findings
 
 
+def _reviewer_excerpt(paper: str, dim: str) -> str:
+    """Truncate long papers to keep prompts manageable.
+
+    citations: front (abstract+intro) + tail (references).
+    Others: first 20k chars covers abstract + methods + results for most papers.
+    """
+    if len(paper) <= 20000:
+        return paper
+    if dim == "citations":
+        return paper[:6000] + "\n\n[... body omitted ...]\n\n" + paper[-6000:]
+    return paper[:20000]
+
+
 def reviewer(state, config: RunnableConfig = None):
     dim = state["dimension"]
     persona = state.get("persona", "skeptic")
     clf = state["classification"]
-    paper = state["paper"]
+    paper = _reviewer_excerpt(state["paper"], dim)
     system_prompt = build_reviewer_prompt(dim, persona)
     header = (
         f"Área: {clf.area} | Tipo: {clf.paper_type}\n"
