@@ -77,14 +77,28 @@ def reviewer(state, config: RunnableConfig = None):
         f"Claims: {'; '.join(clf.claims)}\nPersona: {persona}"
     )
 
+    if dim == "citations":
+        real_citations = [c for c in clf.citations if not c.startswith("@")]
+        if not real_citations:
+            if persona != "skeptic":
+                return {"findings": []}
+            return {"findings": [Finding(
+                dimension="citations", persona="skeptic", severity="minor",
+                issue="Paper não possui referências bibliográficas verificáveis.",
+                evidence="Nenhuma citação acadêmica encontrada — documento não tem seção References/Bibliography.",
+                suggestion="Adicione uma seção References citando os trabalhos que embasam as claims.",
+                confidence=10,
+            )]}
+
     if dim in ("citations", "novelty"):
         # Reasoning models (DeepSeek V4 Flash) return empty content in tool loops —
         # use a non-reasoning model for reliable tool calling
+        real_citations = [c for c in clf.citations if not c.startswith("@")]
         model = make_model("TOOL_MODEL", "openai/gpt-4o-mini", max_tokens=4000, config=config)
         model_with_tools = model.bind_tools(REVIEWER_TOOLS)
         messages = [
             SystemMessage(content=f"{system_prompt}\n\n{_TOOL_INSTRUCTIONS[dim]}\n\n{FINDING_SCHEMA_PROMPT}{_CONCISENESS}"),
-            HumanMessage(content=f"{header}\n\nCitações extraídas: {'; '.join(clf.citations[:20])}\n\nPAPER:\n{paper}"),
+            HumanMessage(content=f"{header}\n\nCitações extraídas: {'; '.join(real_citations[:20])}\n\nPAPER:\n{paper}"),
         ]
         analysis_text = tool_loop(model_with_tools, messages, max_rounds=6)
     else:

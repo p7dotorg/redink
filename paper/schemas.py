@@ -25,10 +25,13 @@ class Classification(BaseModel):
     )
     citations: list[str] = Field(
         description=(
-            "Lista de até 20 referências extraídas da seção References/Bibliografia do paper. "
-            "Formato: 'Autor et al. (ano). Título.' "
-            "NÃO inclua chaves BibTeX (@software, @article, etc.), auto-citações ou DOIs isolados. "
-            "Apenas títulos reais de papers, livros ou artigos citados no texto."
+            "Lista de até 20 referências extraídas da seção References/Bibliography do paper. "
+            "Formato obrigatório: 'Autor et al. (ano). Título.' "
+            "RETORNE [] (lista vazia) se: o documento não tem seção References/Bibliography, "
+            "é um README de repositório, ou só contém auto-citação BibTeX. "
+            "NUNCA inclua: chaves BibTeX (@software, @article, @misc...), URLs soltas, DOIs isolados, "
+            "auto-citações do próprio paper, ou linhas de código. "
+            "Apenas títulos reais de papers, livros ou artigos que o autor cita para embasar o trabalho."
         )
     )
     claims: list[str] = Field(
