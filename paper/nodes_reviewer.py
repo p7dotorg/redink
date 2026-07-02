@@ -5,7 +5,7 @@ from langchain_core.runnables import RunnableConfig
 from paper.nodes_helpers import make_model, tool_loop, extract_arxiv_id
 from paper.prompts import build_reviewer_prompt, FINDING_SCHEMA_PROMPT
 from paper.schemas import Finding, FindingsList
-from paper.tools import REVIEWER_TOOLS, extract_figures
+from paper.tools import REVIEWER_TOOLS, NOVELTY_TOOLS, extract_figures
 
 _TOOL_INSTRUCTIONS = {
     "citations": (
@@ -38,17 +38,21 @@ _TOOL_INSTRUCTIONS = {
         "NUNCA inclua processo de busca — apenas resultados."
     ),
     "novelty": (
-        "Você tem 3 ferramentas:\n"
-        "• search_papers(query) — busca no arXiv por método, problema ou baseline\n"
-        "• get_paper(arxiv_id) — lê o abstract para comparar com as claims do paper\n"
-        "• verify_doi(doi) — verifica papers de conferências fora do arXiv\n\n"
-        "Estratégia: faça ≥3 buscas sobre as contribuições CENTRAIS: "
-        "nome do benchmark/método, problema principal, baselines usados.\n\n"
-        "FORMATO dos findings:\n"
-        "  • Se encontrou prior work: 'PRIOR WORK [título] já faz X → claim Y é incremental'\n"
-        "  • Se NÃO encontrou: 'Busca por [query] não retornou prior work → claim parece válida'\n\n"
+        "Você tem 2 ferramentas:\n"
+        "• search_arxiv(query) — busca no arXiv via paper7 CLI (rápido, cobertura completa de CS/AI/ML)\n"
+        "• get_paper(arxiv_id) — lê o abstract para comparar com as claims do paper\n\n"
+        "Estratégia: para cada claim central do paper, faça ≥1 busca específica.\n"
+        "Use queries técnicas com verbos e conceitos precisos — NÃO use o título do paper como query.\n"
+        "Ex: para 'memory management como skill treinável em LLMs' → busque:\n"
+        "  'LLM agent memory optimization fine-tuning'\n"
+        "  'automated scaffold revision LLM agent'\n"
+        "  'meta-learning memory management language model'\n\n"
+        "FORMATO OBRIGATÓRIO dos findings:\n"
+        "  • PRIOR WORK: [título arXiv:XXXX] já faz X → claim Y do paper é incremental ou redundante\n"
+        "  • NÃO ENCONTRADO: busca por [query] não retornou prior work → claim parece original\n\n"
         "NUNCA critique metodologia geral, falta de peer review ou generalidades. "
-        "NUNCA inclua na resposta tentativas ou descrições de busca — apenas os resultados."
+        "NUNCA inclua tentativas de busca — apenas resultados com título e arXiv ID. "
+        "NUNCA marque como incremental sem citar paper específico encontrado."
     ),
 }
 
@@ -136,14 +140,23 @@ def reviewer(state, config: RunnableConfig = None):
             )),
         ])
         analysis_text = response.content
-    elif dim in ("citations", "novelty"):
+    elif dim == "novelty":
+        tools = NOVELTY_TOOLS  # paper7/arXiv — faster, full CS coverage, no S2 rate limit
+        model = make_model("TOOL_MODEL", "openai/gpt-4o-mini", max_tokens=6000, config=config)
+        model_with_tools = model.bind_tools(tools)
+        messages = [
+            SystemMessage(content=f"{system_prompt}\n\n{_TOOL_INSTRUCTIONS['novelty']}\n\n{FINDING_SCHEMA_PROMPT}{_CONCISENESS}"),
+            HumanMessage(content=f"{header}\n\nPAPER:\n{paper}"),
+        ]
+        analysis_text = tool_loop(model_with_tools, messages, max_rounds=8)
+    elif dim == "citations":
         # Reasoning models (DeepSeek V4 Flash) return empty content in tool loops —
         # use a non-reasoning model for reliable tool calling
         real_citations = [c for c in clf.citations if not c.startswith("@")]
         model = make_model("TOOL_MODEL", "openai/gpt-4o-mini", max_tokens=6000, config=config)
         model_with_tools = model.bind_tools(REVIEWER_TOOLS)
         messages = [
-            SystemMessage(content=f"{system_prompt}\n\n{_TOOL_INSTRUCTIONS[dim]}\n\n{FINDING_SCHEMA_PROMPT}{_CONCISENESS}"),
+            SystemMessage(content=f"{system_prompt}\n\n{_TOOL_INSTRUCTIONS['citations']}\n\n{FINDING_SCHEMA_PROMPT}{_CONCISENESS}"),
             HumanMessage(content=f"{header}\n\nCitações extraídas: {'; '.join(real_citations[:20])}\n\nPAPER:\n{paper}"),
         ]
         analysis_text = tool_loop(model_with_tools, messages, max_rounds=6)

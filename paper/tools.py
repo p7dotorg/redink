@@ -40,6 +40,20 @@ def search_papers(query: str) -> str:
 
 
 @tool
+def search_arxiv(query: str) -> str:
+    """Search arXiv for CS/AI/ML papers via the paper7 CLI.
+    Faster than search_papers and better for finding prior work in computer science.
+    Use this for novelty checks — finding papers that already do what the paper claims.
+    Returns arXiv IDs and titles."""
+    results = paper7_search(query, max_results=5)
+    if not results:
+        results = arxiv_api_search(query, max_results=5)
+    if not results:
+        return "No papers found on arXiv for this query."
+    return "\n".join(f"[{r['id']}] {r['title']}" for r in results)
+
+
+@tool
 def get_paper(arxiv_id: str) -> str:
     """Fetch the abstract and metadata of an arXiv paper by its ID (e.g. '2303.08774').
     Use this after search_papers to read the full abstract and compare claims,
@@ -82,6 +96,7 @@ def verify_doi(doi: str) -> str:
 
 # Tools passed to bind_tools() in reviewer nodes
 REVIEWER_TOOLS = [search_papers, get_paper, verify_doi]
+NOVELTY_TOOLS = [search_arxiv, get_paper]
 
 
 # ---------------------------------------------------------------------------

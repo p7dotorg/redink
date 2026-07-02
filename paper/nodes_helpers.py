@@ -6,10 +6,10 @@ from langchain_core.messages import ToolMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 
-from paper.tools import REVIEWER_TOOLS
+from paper.tools import REVIEWER_TOOLS, NOVELTY_TOOLS
 
 _ARXIV_ID_RE = re.compile(r"(?:arXiv[:/])?(\d{4}\.\d{4,5})(?:v\d+)?", re.IGNORECASE)
-_TOOL_MAP = {t.name: t for t in REVIEWER_TOOLS}
+_ALL_TOOLS = {t.name: t for t in REVIEWER_TOOLS + NOVELTY_TOOLS}
 
 
 def extract_arxiv_id(text: str) -> str | None:
@@ -55,7 +55,7 @@ def tool_loop(model_with_tools, messages: list, max_rounds: int = 5) -> str:
         if not getattr(response, "tool_calls", None):
             break
         for tc in response.tool_calls:
-            tool = _TOOL_MAP.get(tc["name"])
+            tool = _ALL_TOOLS.get(tc["name"])
             result = tool.invoke(tc["args"]) if tool else f"Unknown tool: {tc['name']}"
             messages.append(ToolMessage(content=str(result), tool_call_id=tc["id"]))
     return response.content if response else ""
