@@ -35,7 +35,16 @@ class Classification(BaseModel):
         )
     )
     claims: list[str] = Field(
-        description="Principais afirmações/contribuições do paper (3-7 claims centrais)"
+        description=(
+            "Liste 5-8 contribuições TÉCNICAS e ESPECÍFICAS do paper — o que o método FAZ, não o que afirma.\n"
+            "Formato obrigatório: sujeito-técnico + verbo-de-ação + objeto-específico.\n"
+            "RUIM (vago): 'primeiro a tratar memória como skill treinável'\n"
+            "BOM (técnico): 'meta-LLM revisa trajetórias completas de episódios para reescrever iterativamente o scaffold do agente'\n"
+            "BOM (técnico): 'fine-tune de modelo de memória especializado com exemplos curados pelo meta-LLM a partir de episódios'\n"
+            "BOM (técnico): 'operações file-system (read/write/search/append) como ações de primeira classe no espaço de ação'\n"
+            "BOM (técnico): 'benchmark em três jogos procedurais (Crafter, MiniHack, NetHack) com métrica progression rate'\n"
+            "Inclua: nome do método/sistema, componentes técnicos, benchmarks, métricas, baselines comparados."
+        )
     )
 
 
