@@ -118,11 +118,29 @@ def reviewer(state, config: RunnableConfig = None):
                 confidence=10,
             )]}
 
-    if dim in ("citations", "novelty"):
+    if dim == "citations" and persona != "skeptic":
+        # Practitioner and academic do contextual analysis without S2 tool calls —
+        # running 3 parallel tool-calling agents hammers S2 rate limit (1 req/sec)
+        # and causes all searches to fail, producing generic off-topic findings.
+        # Skeptic does the web verification; others judge claim-support quality.
+        real_citations = [c for c in clf.citations if not c.startswith("@")]
+        model = make_model("REVIEWER_MODEL", "deepseek/deepseek-v4-flash", max_tokens=3000, config=config)
+        response = model.invoke([
+            SystemMessage(content=system_prompt + "\n\n" + FINDING_SCHEMA_PROMPT + _CONCISENESS),
+            HumanMessage(content=(
+                f"{header}\n\n"
+                f"Citações listadas: {'; '.join(real_citations[:20])}\n\n"
+                "Avalie: as claims centrais do paper estão adequadamente suportadas pelas referências citadas? "
+                "Há claims importantes sem citação? As referências são relevantes para o que afirmam?\n\n"
+                f"PAPER:\n{paper}"
+            )),
+        ])
+        analysis_text = response.content
+    elif dim in ("citations", "novelty"):
         # Reasoning models (DeepSeek V4 Flash) return empty content in tool loops —
         # use a non-reasoning model for reliable tool calling
         real_citations = [c for c in clf.citations if not c.startswith("@")]
-        model = make_model("TOOL_MODEL", "openai/gpt-4o-mini", max_tokens=4000, config=config)
+        model = make_model("TOOL_MODEL", "openai/gpt-4o-mini", max_tokens=6000, config=config)
         model_with_tools = model.bind_tools(REVIEWER_TOOLS)
         messages = [
             SystemMessage(content=f"{system_prompt}\n\n{_TOOL_INSTRUCTIONS[dim]}\n\n{FINDING_SCHEMA_PROMPT}{_CONCISENESS}"),
