@@ -7,3 +7,15 @@ dist/
 *.egg-info/
 .pytest_cache/
 *.review.md
+
+# LangGraph dev server state
+.langgraph_api/
+
+# IDE / tool local dirs
+.claude/
+.gates/
+
+# Root-level demo files from initial scaffolding (not part of paper-reviewer)
+/agent.py
+/cli.py
+/exemplo.md

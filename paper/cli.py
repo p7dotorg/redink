@@ -134,9 +134,12 @@ def main():
     report = format_report(result["verdict"])
     print(report)
 
-    # Salva relatório (só se entrada foi arquivo, não stdin)
+    # Salva relatório (só se entrada foi arquivo ou URL, não stdin)
     if target != "-":
-        out_path = Path(target).with_suffix(".review.md")
+        if target.startswith("https://"):
+            out_path = Path(f"{display_name}.review.md")
+        else:
+            out_path = Path(target).with_suffix(".review.md")
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(f"# p7review: {display_name}\n\n")
             f.write(report)
