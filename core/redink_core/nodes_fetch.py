@@ -8,6 +8,19 @@ _GITHUB_RE = re.compile(r"https?://github\.com/([^/]+)/([^/]+?)(?:\.git)?(?:/.*)
 _ARXIV_RE  = re.compile(r"arxiv\.org/(?:abs|pdf)/(\d{4}\.\d{4,5})", re.IGNORECASE)
 _CANDIDATES = ["README.md", "paper.md", "PAPER.md", "docs/paper.md"]
 
+_STRIP_BLOCKS = re.compile(
+    r"<(script|style|noscript|nav|footer|header)[^>]*>.*?</\1>",
+    re.DOTALL | re.IGNORECASE,
+)
+
+def _html_to_text(html: str) -> str:
+    """Strip script/style blocks then all tags; collapse whitespace."""
+    text = _STRIP_BLOCKS.sub(" ", html)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
 
 def _fetch_github_readme(url: str) -> str | None:
     m = _GITHUB_RE.match(url.strip())
@@ -36,11 +49,9 @@ def _fetch_arxiv(url: str) -> str | None:
     try:
         r = httpx.get(f"https://ar5iv.labs.arxiv.org/html/{arxiv_id}", timeout=20, follow_redirects=True)
         if r.status_code == 200 and len(r.text) > 2000:
-            # strip HTML tags roughly
-            text = re.sub(r"<[^>]+>", " ", r.text)
-            text = re.sub(r"\s{2,}", "\n", text).strip()
+            text = _html_to_text(r.text)
             if len(text) > 1000:
-                return f"arXiv:{arxiv_id}\n\n{text[:40000]}"
+                return f"arXiv:{arxiv_id}\n\n{text}"
     except Exception:
         pass
 
@@ -48,9 +59,7 @@ def _fetch_arxiv(url: str) -> str | None:
     try:
         r = httpx.get(f"https://arxiv.org/abs/{arxiv_id}", timeout=15, follow_redirects=True)
         if r.status_code == 200:
-            text = re.sub(r"<[^>]+>", " ", r.text)
-            text = re.sub(r"\s{2,}", "\n", text).strip()
-            return f"arXiv:{arxiv_id}\n\n{text[:20000]}"
+            return f"arXiv:{arxiv_id}\n\n{_html_to_text(r.text)}"
     except Exception:
         pass
 
