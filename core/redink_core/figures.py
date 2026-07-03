@@ -41,7 +41,10 @@ def extract_figures(arxiv_id: str, max_figures: int = 6) -> list[dict]:
         caption = ""
         if cap_match:
             caption = re.sub(r"<[^>]+>", " ", cap_match.group(1)).strip()
-            caption = re.sub(r"\s+", " ", caption)[:300]
+            caption = re.sub(r"\s+", " ", caption)
+            if len(caption) > 1000:
+                # mark the cut so the reviewer doesn't mistake truncation for a paper flaw
+                caption = caption[:1000] + " [legenda truncada]"
 
         figures.append({"url": img_url, "caption": caption})
         if len(figures) >= max_figures:

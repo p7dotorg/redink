@@ -1,4 +1,6 @@
 """classify node."""
+import re
+
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
@@ -37,10 +39,36 @@ def _classify_excerpt(paper: str) -> str:
     return paper[:12000] + "\n\n[... seções intermediárias omitidas ...]\n\n" + paper[-3000:]
 
 
+_ML_AREAS = ("machine learning", "deep learning", "computer vision", "nlp",
+             "natural language", "artificial intelligence", "computação", "software")
+
+
+def _drop_self_citations(result, paper: str) -> None:
+    """Remove citations that are actually the paper citing itself.
+
+    The schema forbids self-citations but structuring models keep including
+    them (e.g. 'Vaswani et al. (2017)' extracted from the Attention paper),
+    which later produces false 'unverifiable reference' findings.
+    """
+    head = paper[:3000].lower()
+    kept = []
+    for c in result.citations:
+        m = re.match(r"^.*?\(\d{4}\)[.,]?\s*(.+)$", c)  # 'Autor et al. (ano). Título.'
+        title_part = (m.group(1) if m else c).strip(" .").lower()
+        if len(title_part) >= 15 and title_part[:40] in head:
+            continue  # citation title appears in the paper's own header — self-citation
+        kept.append(c)
+    result.citations = kept
+
+
 def classify(state, config: RunnableConfig = None):
     model = make_model("CLASSIFY_MODEL", "qwen/qwen3-8b", Classification, max_tokens=2000, config=config)
     result = model.invoke([
         SystemMessage(content=_CLASSIFY_SYSTEM),
         HumanMessage(content=f"Classifique este paper:\n\n{_classify_excerpt(state['paper'])}"),
     ])
+    # Enforce in code what the prompt only asks for
+    _drop_self_citations(result, state["paper"])
+    if any(a in result.area.lower() for a in _ML_AREAS) and "reproducibility" not in result.dimensions:
+        result.dimensions.append("reproducibility")
     return {"classification": result}
