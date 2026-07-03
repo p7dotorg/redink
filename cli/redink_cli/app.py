@@ -56,6 +56,7 @@ def _run_oneshot(target: str) -> None:
     report      = render_report(final_state)
 
     if target != "-":
+        stem = display_name.rsplit(".", 1)[0] if "." in display_name else display_name
         out_path = (
             Path(f"{display_name}.review.md")
             if target.startswith("https://")
@@ -63,6 +64,9 @@ def _run_oneshot(target: str) -> None:
         )
         out_path.write_text(f"# redink: {display_name}\n\n{report}", encoding="utf-8")
         console.print(f"\n  saved  [dim]{out_path}[/dim]")
+
+        from redink_cli.commands import _try_annotate_pdf
+        _try_annotate_pdf(final_state, stem)
 
 
 # ── chat REPL ─────────────────────────────────────────────────────────────────

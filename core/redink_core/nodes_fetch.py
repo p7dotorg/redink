@@ -1,10 +1,11 @@
-"""fetch_paper node — fetches paper content from a GitHub URL if paper is not set."""
+"""fetch_paper node — fetches paper content from a URL if paper is not set."""
 import re
 
 import httpx
 from langchain_core.runnables import RunnableConfig
 
 _GITHUB_RE = re.compile(r"https?://github\.com/([^/]+)/([^/]+?)(?:\.git)?(?:/.*)?$")
+_ARXIV_RE  = re.compile(r"arxiv\.org/(?:abs|pdf)/(\d{4}\.\d{4,5})", re.IGNORECASE)
 _CANDIDATES = ["README.md", "paper.md", "PAPER.md", "docs/paper.md"]
 
 
@@ -25,12 +26,44 @@ def _fetch_github_readme(url: str) -> str | None:
     return None
 
 
+def _fetch_arxiv(url: str) -> str | None:
+    m = _ARXIV_RE.search(url)
+    if not m:
+        return None
+    arxiv_id = m.group(1)
+
+    # Try ar5iv for full HTML text first
+    try:
+        r = httpx.get(f"https://ar5iv.labs.arxiv.org/html/{arxiv_id}", timeout=20, follow_redirects=True)
+        if r.status_code == 200 and len(r.text) > 2000:
+            # strip HTML tags roughly
+            text = re.sub(r"<[^>]+>", " ", r.text)
+            text = re.sub(r"\s{2,}", "\n", text).strip()
+            if len(text) > 1000:
+                return f"arXiv:{arxiv_id}\n\n{text[:40000]}"
+    except Exception:
+        pass
+
+    # Fallback: abstract page
+    try:
+        r = httpx.get(f"https://arxiv.org/abs/{arxiv_id}", timeout=15, follow_redirects=True)
+        if r.status_code == 200:
+            text = re.sub(r"<[^>]+>", " ", r.text)
+            text = re.sub(r"\s{2,}", "\n", text).strip()
+            return f"arXiv:{arxiv_id}\n\n{text[:20000]}"
+    except Exception:
+        pass
+
+    return None
+
+
 def fetch_paper(state, config: RunnableConfig = None):
-    """Pass-through if paper is already set; else fetch from github_url."""
+    """Pass-through if paper is already set; else fetch from github_url (GitHub or arXiv)."""
     if state.get("paper"):
         return {}
-    github_url = state.get("github_url")
-    if not github_url:
+    url = state.get("github_url")
+    if not url:
         return {}
-    content = _fetch_github_readme(github_url)
+
+    content = _fetch_arxiv(url) or _fetch_github_readme(url)
     return {"paper": content} if content else {}

@@ -222,12 +222,13 @@ def stream_review(input_state: dict) -> dict:
                     _refresh()
 
                 # Merge state
-                for k, v in update.items():
-                    if k == "findings" and isinstance(v, list):
-                        final_state.setdefault("findings", [])
-                        final_state["findings"].extend(v)
-                    else:
-                        final_state[k] = v
+                if update:
+                    for k, v in update.items():
+                        if k == "findings" and isinstance(v, list):
+                            final_state.setdefault("findings", [])
+                            final_state["findings"].extend(v)
+                        else:
+                            final_state[k] = v
 
     console.print("")
     return final_state
