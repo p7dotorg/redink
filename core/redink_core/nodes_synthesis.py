@@ -160,7 +160,8 @@ def judge_panel(state, config: RunnableConfig = None):
     )
 
     def _vote(lens_key: str) -> JudgeVote | None:
-        model = make_model("STRUCTURED_MODEL", "openai/gpt-4o-mini",
+        # verdict-deciding call — worth a stronger model than the structurers
+        model = make_model("JUDGE_MODEL", "openai/gpt-4o",
                            JudgeVote, max_tokens=800, config=config)
         try:
             v = model.invoke([
@@ -182,6 +183,10 @@ def judge_panel(state, config: RunnableConfig = None):
         return {"judge_votes": None}
     top, top_n = Counter(v.vote for v in votes).most_common(1)[0]
     verdict = top if top_n >= 2 else "REVISE"
+    if verdict == "FAIL" and sustained == 0:
+        # rubric backstop: FAIL requires a critical that survived the debate —
+        # a majority voting FAIL over majors alone is miscalibration, not signal
+        verdict = "REVISE"
     return {"judge_votes": JudgePanel(votes=votes, verdict=verdict)}
 
 

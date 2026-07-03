@@ -102,6 +102,9 @@ Mapeie as contradições:
 3. Qual dimensão tem mais discordância? (most_disputed_dimension)
 
 Seja preciso: uma contradição real é quando persona A diz "X está OK" e persona B diz "X é um problema crítico".
+Se não houver contradições REAIS entre posições que as personas de fato
+escreveram, retorne contradictions: [] — lista vazia é o resultado correto.
+NUNCA invente, inverta ou parafraseie posições que nenhuma persona escreveu.
 """
 
 DEFENDER_PROMPT = """
@@ -152,12 +155,21 @@ Sua lente de julgamento: {lens}
 CONTEXTO TEMPORAL: {year_note} Julgue pelos padrões de revisão vigentes
 NESSA ÉPOCA na área — não exija práticas que só viraram norma depois.
 
-Você verá os findings consolidados e o resultado do debate adversarial:
-todo finding CRITICAL passou por defesa do autor + juiz. 'sustained'
-sobreviveu à contestação; 'downgraded' foi rebaixado; os descartados não
-aparecem. O número de criticals que SOBREVIVERAM ao debate é o sinal mais
-forte do julgamento — uma lista longa de majors repetitivos NÃO equivale
-a um critical. Zero criticals sustentados torna FAIL difícil de justificar.
+COMO LER O RESULTADO DO DEBATE: cada finding CRITICAL foi contestado por
+uma defesa do autor e decidido por um árbitro independente.
+- 'sustained'  = a CRÍTICA venceu o debate. O problema invalida uma conclusão
+  central do paper. É o sinal mais grave possível neste relatório.
+- 'downgraded' = a DEFESA do autor venceu. O problema é real mas NÃO invalida
+  nenhuma conclusão central — por isso foi rebaixado a major.
+- Criticals descartados no debate não aparecem.
+Portanto: "0 sustained" é um resultado FAVORÁVEL ao paper, não contra ele.
+
+REGRA DE DECISÃO:
+- FAIL exige pelo menos 1 critical SUSTENTADO — ou uma justificativa explícita
+  de por que o conjunto de majors, somado, invalida uma conclusão central.
+- Com 0 criticals sustentados, o veredito esperado é PASS ou REVISE:
+  vários majors legítimos → REVISE; poucos problemas endereçáveis → PASS.
+- Volume NÃO é gravidade: uma lista de majors não equivale a um critical.
 
 Vote PASS (aceitar), REVISE (major revision) ou FAIL (rejeitar), com justificativa.
 """
