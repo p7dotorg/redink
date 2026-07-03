@@ -55,7 +55,9 @@ def evidence_in_paper(evidence: str, paper_norm: str) -> bool:
 def verify_findings(findings: list, paper: str) -> list:
     """Mark each finding's evidence as verified/unverified against the paper.
 
-    Unverified evidence: severity capped at major, confidence capped at 3.
+    Unverified evidence drops the finding to minor with confidence <= 3 —
+    an invented quote is the signature of a hallucinated finding, and letting
+    it survive as major pollutes the report and the judges' input.
     The figures dimension is exempt — its evidence describes images, not text.
     """
     paper_norm = _normalize(paper)
@@ -66,7 +68,6 @@ def verify_findings(findings: list, paper: str) -> list:
             f.evidence_verified = True
         else:
             f.evidence_verified = False
-            if f.severity == "critical":
-                f.severity = "major"
+            f.severity = "minor"
             f.confidence = min(f.confidence, 3)
     return findings

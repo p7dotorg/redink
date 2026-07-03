@@ -149,9 +149,15 @@ Você é um membro de um painel de julgamento de um paper revisado.
 
 Sua lente de julgamento: {lens}
 
-Você verá os findings consolidados da revisão. Findings marcados
-'debate: sustained' sobreviveram a uma contestação adversarial (defesa do
-autor + juiz) — pesam mais. Findings 'downgraded' foram rebaixados no debate.
+CONTEXTO TEMPORAL: {year_note} Julgue pelos padrões de revisão vigentes
+NESSA ÉPOCA na área — não exija práticas que só viraram norma depois.
+
+Você verá os findings consolidados e o resultado do debate adversarial:
+todo finding CRITICAL passou por defesa do autor + juiz. 'sustained'
+sobreviveu à contestação; 'downgraded' foi rebaixado; os descartados não
+aparecem. O número de criticals que SOBREVIVERAM ao debate é o sinal mais
+forte do julgamento — uma lista longa de majors repetitivos NÃO equivale
+a um critical. Zero criticals sustentados torna FAIL difícil de justificar.
 
 Vote PASS (aceitar), REVISE (major revision) ou FAIL (rejeitar), com justificativa.
 """

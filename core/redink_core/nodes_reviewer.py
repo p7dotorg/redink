@@ -32,20 +32,18 @@ def _structured_findings(
             "Regras: na dúvida entre dois níveis, escolha o MAIS BRANDO. "
             "Ausência de algo que pode estar em seção não mostrada NUNCA é critical. "
             "Crítica de tom/linguagem (título forte, claim otimista) é no máximo minor. "
-            "O campo evidence deve conter um trecho LITERAL do paper, não paráfrase."
+            "O campo evidence deve conter um trecho LITERAL do paper, não paráfrase.\n\n"
+            "NÃO GERE FINDING quando a análise conclui que uma claim parece "
+            "original, válida, ou que a busca NÃO encontrou prior work nem "
+            "problemas — isso é resultado positivo, não é problema. "
+            "Retornar lista vazia é correto quando a análise não aponta problemas reais."
         )),
         HumanMessage(content=f"Dimensão: {dim}\nPersona: {persona}\n\nAnálise:\n{analysis_text[:5000]}"),
     ])
     findings = result.findings if isinstance(result, FindingsList) else []
     for f in findings:
         f.persona = persona
-    if not findings:
-        findings = [Finding(
-            dimension=dim, persona=persona, severity="minor",
-            issue="Análise não retornou findings estruturados.",
-            evidence=analysis_text[:200],
-            suggestion="Revisar manualmente esta dimensão.",
-        )]
+    # empty is a valid outcome: the analysis found no real problems
     return findings
 
 

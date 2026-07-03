@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
-from redink_core.nodes_helpers import make_model
+from redink_core.nodes_helpers import make_model, extract_arxiv_id
 from redink_core.prompts import (
     CONTRADICTION_MAP_PROMPT, BLIND_SPOT_PROMPT, DEDUP_PROMPT,
     JUDGE_LENSES, JUDGE_PANEL_PROMPT,
@@ -84,9 +84,8 @@ def _apply_clusters(findings: list[Finding], clusters) -> list[Finding]:
     return deduped
 
 
-def _dedup_findings(findings: list[Finding], config: RunnableConfig = None) -> list[Finding]:
-    """Semantic dedup: cluster findings that report the same underlying issue
-    (across personas AND dimensions) before any counting happens."""
+def _dedup_pass(findings: list[Finding], config: RunnableConfig = None) -> list[Finding]:
+    """One clustering call over a list of findings."""
     if len(findings) <= 1:
         return findings
     listing = "\n".join(
@@ -106,11 +105,43 @@ def _dedup_findings(findings: list[Finding], config: RunnableConfig = None) -> l
     return _apply_clusters(findings, result.clusters)
 
 
+def _dedup_findings(findings: list[Finding], config: RunnableConfig = None) -> list[Finding]:
+    """Two-pass semantic dedup. A single call over 70+ findings clusters
+    poorly; per-dimension passes are small enough to cluster well, and a
+    final global pass catches cross-dimension duplicates."""
+    if len(findings) <= 1:
+        return findings
+
+    by_dim: dict[str, list[Finding]] = {}
+    for f in findings:
+        by_dim.setdefault(f.dimension, []).append(f)
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        stage1_groups = list(pool.map(lambda fs: _dedup_pass(fs, config), by_dim.values()))
+    stage1 = [f for group in stage1_groups for f in group]
+
+    return _dedup_pass(stage1, config)
+
+
 def judge_panel(state, config: RunnableConfig = None):
     """Three judges with distinct lenses vote PASS/REVISE/FAIL on the
     post-debate findings. Majority wins; a three-way split lands on REVISE."""
     findings = state.get("deduped_findings") or state.get("findings", [])
     clf = state["classification"]
+
+    paper = state.get("paper") or ""
+    arxiv_id = extract_arxiv_id(paper)
+    year = 2000 + int(arxiv_id[:2]) if arxiv_id and arxiv_id[:2].isdigit() else None
+    year_note = (
+        f"o paper foi publicado em {year}."
+        if year else "o ano do paper é desconhecido — infira a época pelo conteúdo."
+    )
+
+    n_crit = sum(1 for f in findings if f.severity == "critical")
+    n_maj  = sum(1 for f in findings if f.severity == "major")
+    n_min  = sum(1 for f in findings if f.severity == "minor")
+    sustained  = sum(1 for f in findings if f.debate_outcome == "sustained")
+    downgraded = sum(1 for f in findings if f.debate_outcome == "downgraded")
 
     listing = "\n".join(
         f"- [{f.severity.upper()}] {f.dimension}"
@@ -121,8 +152,11 @@ def judge_panel(state, config: RunnableConfig = None):
     case = (
         f"Paper: {clf.area} — {clf.paper_type}\n"
         f"Claims centrais: {'; '.join(clf.claims[:5])}\n\n"
+        f"DEBATE ADVERSARIAL: {sustained} critical(s) sustentados, "
+        f"{downgraded} rebaixados para major.\n"
+        f"CONTAGEM PÓS-DEBATE: {n_crit} critical · {n_maj} major · {n_min} minor\n\n"
         f"FINDINGS CONSOLIDADOS:\n{listing}\n\n"
-        f"INÍCIO DO PAPER:\n{(state.get('paper') or '')[:6000]}"
+        f"INÍCIO DO PAPER:\n{paper[:6000]}"
     )
 
     def _vote(lens_key: str) -> JudgeVote | None:
@@ -130,7 +164,8 @@ def judge_panel(state, config: RunnableConfig = None):
                            JudgeVote, max_tokens=800, config=config)
         try:
             v = model.invoke([
-                SystemMessage(content=JUDGE_PANEL_PROMPT.format(lens=JUDGE_LENSES[lens_key])),
+                SystemMessage(content=JUDGE_PANEL_PROMPT.format(
+                    lens=JUDGE_LENSES[lens_key], year_note=year_note)),
                 HumanMessage(content=case),
             ])
         except Exception:
