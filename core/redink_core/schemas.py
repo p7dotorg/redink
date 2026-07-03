@@ -56,10 +56,33 @@ class Finding(BaseModel):
     evidence: str = Field(description="Evidência ou trecho do paper que suporta o problema")
     suggestion: str = Field(description="O que o autor deve fazer para corrigir")
     confidence: int = Field(default=5, description="Confiança 1-10 baseada em consenso entre personas")
+    evidence_verified: bool = Field(
+        default=True,
+        description="True se o trecho de evidence foi localizado no texto do paper"
+    )
 
 
 class FindingsList(BaseModel):
     findings: list[Finding]
+
+
+class FindingCluster(BaseModel):
+    representative: int = Field(
+        description="Índice do finding que melhor expressa o problema do cluster"
+    )
+    members: list[int] = Field(
+        description="Índices de TODOS os findings deste cluster (incluindo o representative)"
+    )
+
+
+class DedupMap(BaseModel):
+    clusters: list[FindingCluster] = Field(
+        description=(
+            "Partição dos findings em clusters de problema idêntico. "
+            "Cada índice aparece em exatamente um cluster; clusters de um "
+            "único finding são normais."
+        )
+    )
 
 
 class Contradiction(BaseModel):

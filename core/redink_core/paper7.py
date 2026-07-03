@@ -53,7 +53,8 @@ def arxiv_api_search(query: str, max_results: int = 5) -> list[dict]:
     url = "https://api.semanticscholar.org/graph/v1/paper/search"
     for attempt in range(3):
         try:
-            time.sleep(1.5 * (attempt + 1))  # 1.5s, 3s, 4.5s — respect S2 rate limit
+            if attempt:  # back off only after a 429 — first attempt goes straight out
+                time.sleep(1.5 * attempt)
             r = httpx.get(
                 url,
                 params={"query": query[:200], "fields": "title,year,externalIds", "limit": max_results},

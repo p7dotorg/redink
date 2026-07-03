@@ -1,11 +1,12 @@
 """reviewer and figure_reviewer nodes."""
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
+from redink_core.evidence import verify_findings
 from redink_core.nodes_helpers import make_model, tool_loop, extract_arxiv_id, reviewer_excerpt
 from redink_core.prompts import build_reviewer_prompt, FINDING_SCHEMA_PROMPT
 from redink_core.reviewer_prompts import TOOL_INSTRUCTIONS, CONCISENESS
 from redink_core.schemas import Finding, FindingsList
-from redink_core.tools import REVIEWER_TOOLS, NOVELTY_TOOLS
+from redink_core.tools import REVIEWER_TOOLS, NOVELTY_TOOLS, set_paper_cutoff
 from redink_core.figures import extract_figures
 
 
@@ -52,6 +53,7 @@ def reviewer(state, config: RunnableConfig = None):
     dim     = state["dimension"]
     persona = state.get("persona", "skeptic")
     clf     = state["classification"]
+    set_paper_cutoff(extract_arxiv_id(state["paper"]))
     paper   = reviewer_excerpt(state["paper"], dim)
     system_prompt = build_reviewer_prompt(dim, persona)
     header  = (
@@ -114,7 +116,8 @@ def reviewer(state, config: RunnableConfig = None):
         ])
         analysis_text = response.content
 
-    return {"findings": _structured_findings(analysis_text, dim, persona, config)}
+    findings = _structured_findings(analysis_text, dim, persona, config)
+    return {"findings": verify_findings(findings, state["paper"])}
 
 
 def figure_reviewer(state, config: RunnableConfig = None):

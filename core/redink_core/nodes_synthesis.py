@@ -1,12 +1,12 @@
 """contradiction_map, blind_spot, and synthesize nodes."""
-from collections import Counter
-
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
 from redink_core.nodes_helpers import make_model
-from redink_core.prompts import CONTRADICTION_MAP_PROMPT, BLIND_SPOT_PROMPT
-from redink_core.schemas import Finding, Verdict, ContradictionMap, BlindSpot
+from redink_core.prompts import CONTRADICTION_MAP_PROMPT, BLIND_SPOT_PROMPT, DEDUP_PROMPT
+from redink_core.schemas import Finding, Verdict, ContradictionMap, BlindSpot, DedupMap
+
+_SEV_RANK = {"critical": 0, "major": 1, "minor": 2}
 
 
 def contradiction_map(state, config: RunnableConfig = None):
@@ -27,12 +27,6 @@ def contradiction_map(state, config: RunnableConfig = None):
     ])
     if not isinstance(result, ContradictionMap):
         result = ContradictionMap(contradictions=[], consensus=[], most_disputed_dimension=None)
-    consensus_issues = {c.lower() for c in result.consensus}
-    for f in findings:
-        for c in consensus_issues:
-            if any(word in f.issue.lower() for word in c.split()[:3]):
-                f.confidence = 9
-                break
     return {"contradiction_map": result}
 
 
@@ -50,25 +44,74 @@ def blind_spot(state, config: RunnableConfig = None):
     return {"blind_spots": result}
 
 
+def _apply_clusters(findings: list[Finding], clusters) -> list[Finding]:
+    """Collapse each cluster to one representative finding.
+
+    Representative = the highest-severity member (ties broken toward the
+    model's pick). Multi-persona clusters get confidence 9 — cross-persona
+    agreement is the strongest signal the pipeline produces.
+    """
+    n = len(findings)
+    assigned: set[int] = set()
+    deduped: list[Finding] = []
+
+    for cluster in clusters:
+        members = [i for i in cluster.members if 0 <= i < n and i not in assigned]
+        if not members:
+            continue
+        assigned.update(members)
+        rep_idx = min(
+            members,
+            key=lambda i: (_SEV_RANK[findings[i].severity], i != cluster.representative),
+        )
+        rep = findings[rep_idx]
+        personas = {findings[i].persona for i in members}
+        if len(personas) >= 2:
+            rep.confidence = 9
+        deduped.append(rep)
+
+    for i in range(n):
+        if i not in assigned:
+            deduped.append(findings[i])
+    return deduped
+
+
+def _dedup_findings(findings: list[Finding], config: RunnableConfig = None) -> list[Finding]:
+    """Semantic dedup: cluster findings that report the same underlying issue
+    (across personas AND dimensions) before any counting happens."""
+    if len(findings) <= 1:
+        return findings
+    listing = "\n".join(
+        f"[{i}] ({f.severity}/{f.dimension}/{f.persona}) {f.issue[:200]}"
+        for i, f in enumerate(findings)
+    )
+    model = make_model("STRUCTURED_MODEL", "openai/gpt-4o-mini", DedupMap, max_tokens=4000, config=config)
+    try:
+        result = model.invoke([
+            SystemMessage(content=DEDUP_PROMPT),
+            HumanMessage(content=listing),
+        ])
+    except Exception:
+        result = None
+    if not isinstance(result, DedupMap) or not result.clusters:
+        return findings
+    return _apply_clusters(findings, result.clusters)
+
+
 def synthesize(state, config: RunnableConfig = None):
-    findings = state["findings"]
     clf = state["classification"]
     c_map = state.get("contradiction_map")
     b_spots = state.get("blind_spots")
+
+    findings = _dedup_findings(state["findings"], config)
 
     critical = [f for f in findings if f.severity == "critical"]
     major = [f for f in findings if f.severity == "major"]
     minor = [f for f in findings if f.severity == "minor"]
 
-    issue_personas: dict[str, set] = {}
-    issue_full: dict[str, str] = {}
-    for f in findings:
-        key = f.dimension + ":" + f.issue[:40]
-        issue_personas.setdefault(key, set()).add(f.persona)
-        issue_full.setdefault(key, f.issue)
-    high_confidence = [issue_full[k] for k, v in issue_personas.items() if len(v) >= 2]
+    high_confidence = [f.issue for f in findings if f.confidence >= 9]
+    consensus_criticals = [f for f in critical if f.confidence >= 9]
 
-    consensus_criticals = [f for f in critical if len(issue_personas.get(f.dimension + ":" + f.issue[:40], set())) >= 2]
     if len(consensus_criticals) >= 2 or len(critical) >= 3:
         status = "FAIL"
     elif critical or len(major) >= 3:
@@ -105,16 +148,10 @@ def synthesize(state, config: RunnableConfig = None):
         )),
     ])
 
-    seen: dict[str, Finding] = {}
-    for f in sorted(findings, key=lambda x: {"critical": 0, "major": 1, "minor": 2}[x.severity]):
-        key = f.dimension + ":" + f.issue[:40]
-        if key not in seen:
-            seen[key] = f
-
     return {"verdict": Verdict(
         status=status, summary=summary.content,
         critical_count=len(critical), major_count=len(major), minor_count=len(minor),
-        findings=list(seen.values()),
+        findings=sorted(findings, key=lambda f: _SEV_RANK[f.severity]),
         contradiction_map=c_map, blind_spots=b_spots,
         high_confidence_issues=high_confidence,
     )}

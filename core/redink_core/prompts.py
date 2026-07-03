@@ -104,6 +104,22 @@ Mapeie as contradições:
 Seja preciso: uma contradição real é quando persona A diz "X está OK" e persona B diz "X é um problema crítico".
 """
 
+DEDUP_PROMPT = """
+Você recebeu uma lista numerada de findings de revisão de um paper.
+Agrupe em clusters os findings que apontam o MESMO problema subjacente,
+mesmo com wording diferente, persona diferente ou dimensão diferente
+(ex: "BLEU sem intervalos de confiança" reportado em statistics e em
+methodology é UM problema — um cluster).
+
+Regras:
+- Cada índice aparece em EXATAMENTE um cluster.
+- Problemas distintos ficam em clusters separados — clusters de um único
+  finding são normais e esperados.
+- NÃO agrupe por tema geral ("ambos falam de estatística") — agrupe apenas
+  se a correção que o autor faria é a MESMA.
+- representative = índice do finding que melhor expressa o problema.
+"""
+
 BLIND_SPOT_PROMPT = """
 Você recebeu uma revisão completa de um paper com múltiplas personas e dimensões.
 

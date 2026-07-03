@@ -1,10 +1,59 @@
 """LangChain tools for the reviewer nodes — each does exactly one thing."""
 import os
+import re
+from contextvars import ContextVar
 
 import httpx
 from langchain_core.tools import tool
 
 from redink_core.paper7 import paper7_search, paper7_get, arxiv_api_search
+
+# Publication date of the paper under review (YYMM int, e.g. 1706) — search
+# results dated after it are prior-work anachronisms and get filtered out.
+_PAPER_YYMM: ContextVar[int | None] = ContextVar("paper_yymm", default=None)
+
+_ARXIV_YYMM_RE = re.compile(r"^(\d{4})\.\d{4,5}")
+_TITLE_YEAR_RE = re.compile(r"\((\d{4})\)\s*$")
+
+
+def set_paper_cutoff(arxiv_id: str | None) -> None:
+    """Set the temporal cutoff from the reviewed paper's arXiv ID (YYMM.NNNNN)."""
+    if arxiv_id:
+        m = _ARXIV_YYMM_RE.match(arxiv_id)
+        if m:
+            _PAPER_YYMM.set(int(m.group(1)))
+            return
+    _PAPER_YYMM.set(None)
+
+
+def _is_after_cutoff(result_id: str, title: str, cutoff: int) -> bool:
+    m = _ARXIV_YYMM_RE.match(result_id or "")
+    if m:
+        return int(m.group(1)) > cutoff
+    m = _TITLE_YEAR_RE.search(title or "")
+    if m:
+        return int(m.group(1)) > 2000 + cutoff // 100
+    return False  # undated result — keep, the model can judge
+
+
+def _temporal_filter(results: list[dict]) -> tuple[list[dict], int]:
+    """Drop results published after the paper under review."""
+    cutoff = _PAPER_YYMM.get()
+    if cutoff is None:
+        return results, 0
+    kept = [r for r in results
+            if not _is_after_cutoff(r.get("id", ""), r.get("title", ""), cutoff)]
+    return kept, len(results) - len(kept)
+
+
+def _format_results(results: list[dict], dropped: int, empty_msg: str) -> str:
+    lines = [f"[{r['id']}] {r['title']}" for r in results]
+    if dropped:
+        lines.append(
+            f"({dropped} resultado(s) publicados DEPOIS do paper sob revisão "
+            "foram excluídos — não são prior work)"
+        )
+    return "\n".join(lines) if lines else empty_msg
 
 
 @tool
@@ -18,21 +67,23 @@ def search_papers(query: str) -> str:
         try:
             r = httpx.get(f"{base}/api/search", params={"q": query}, timeout=10)
             if r.status_code == 200:
-                results = r.json()
-                if results:
-                    return "\n".join(
-                        f"[{r.get('id', r.get('arxivId', ''))}] {r.get('title', '')}"
-                        for r in results[:5]
-                    )
+                raw = r.json()
+                if raw:
+                    results = [
+                        {"id": item.get("id", item.get("arxivId", "")),
+                         "title": item.get("title", "")}
+                        for item in raw[:5]
+                    ]
+                    kept, dropped = _temporal_filter(results)
+                    return _format_results(kept, dropped, "No papers found for this query.")
         except Exception:
             pass
 
     results = arxiv_api_search(query, max_results=5)
     if not results:
         results = paper7_search(query, max_results=5)
-    if not results:
-        return "No papers found for this query."
-    return "\n".join(f"[{r['id']}] {r['title']}" for r in results)
+    kept, dropped = _temporal_filter(results)
+    return _format_results(kept, dropped, "No papers found for this query.")
 
 
 @tool
@@ -44,9 +95,8 @@ def search_arxiv(query: str) -> str:
     results = paper7_search(query, max_results=5)
     if not results:
         results = arxiv_api_search(query, max_results=5)
-    if not results:
-        return "No papers found on arXiv for this query."
-    return "\n".join(f"[{r['id']}] {r['title']}" for r in results)
+    kept, dropped = _temporal_filter(results)
+    return _format_results(kept, dropped, "No papers found on arXiv for this query.")
 
 
 @tool
