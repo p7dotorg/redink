@@ -51,10 +51,12 @@ Estimated cost per review: **~$0.10–0.20**.
 
 ## Setup
 
+**Requires Python ≥ 3.11 and [uv](https://docs.astral.sh/uv/getting-started/installation/).**
+
 ```bash
 git clone https://github.com/p7dotorg/redink
 cd redink
-pip install -e .
+uv sync
 
 cp .env.example .env
 # edit .env — set OPENROUTER_API_KEY at minimum
@@ -62,15 +64,38 @@ cp .env.example .env
 
 ## Usage
 
+### Interactive chat (default)
+
 ```bash
-# Review a local paper (markdown or plain text)
-redink my-paper.md
+uv run redink
+```
 
-# Review from a GitHub repo (fetches README.md)
-redink https://github.com/user/paper-repo
+Opens a REPL. Use slash commands:
 
-# Review from arXiv
-redink https://arxiv.org/abs/2607.01224
+| Command | Description |
+|---|---|
+| `/review <path\|url>` | Run a full review (streams progress) |
+| `/report` | Re-display the last verdict |
+| `/rerun <dimension>` | Re-run one dimension (e.g. `novelty`) |
+| `/clear` | Clear screen and restart |
+| `/exit` | Quit |
+
+After a review, type freely to ask questions about findings.
+
+### One-shot (CI / pipe)
+
+```bash
+# Local file
+uv run redink my-paper.md
+
+# GitHub repo (fetches README.md)
+uv run redink https://github.com/user/paper-repo
+
+# arXiv
+uv run redink https://arxiv.org/abs/2607.01224
+
+# stdin
+cat paper.md | uv run redink -
 ```
 
 The report is printed to stdout and saved as `<paper>.review.md`.
