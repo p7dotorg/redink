@@ -9,6 +9,32 @@ console = Console()
 PERSONAS = ["skeptic", "practitioner", "academic"]
 
 
+def _try_annotate_pdf(state: dict, output_stem: str) -> None:
+    """If paper has an arXiv ID, download and annotate its PDF."""
+    from redink_core.nodes_helpers import extract_arxiv_id
+    from redink_cli.pdf_annotator import annotate, summary_page
+
+    paper = state.get("paper", "")
+    arxiv_id = extract_arxiv_id(paper)
+    if not arxiv_id:
+        return
+
+    findings = state.get("findings", [])
+    verdict  = state.get("verdict")
+    if not findings:
+        return
+
+    out = Path(f"{output_stem}.annotated.pdf")
+    console.print(f"\n  [dim]annotating PDF {arxiv_id} ...[/dim]")
+    ok = annotate(arxiv_id, findings, out)
+    if ok:
+        if verdict:
+            summary_page(out, verdict)
+        console.print(f"  [#E8252A]●[/] annotated PDF  [dim]{out}[/dim]")
+    else:
+        console.print("  [dim]PDF annotation skipped (could not fetch arXiv PDF)[/dim]")
+
+
 def cmd_review(arg: str, stream_review, render_report) -> dict:
     """Run /review <path|url> and return final state."""
     if not arg:
@@ -16,16 +42,19 @@ def cmd_review(arg: str, stream_review, render_report) -> dict:
         return {}
     if arg.startswith("https://"):
         input_state = {"github_url": arg}
+        stem = arg.rsplit("/", 1)[-1]
     else:
         p = Path(arg)
         if not p.exists():
             console.print(f"  [red]file not found: {p}[/red]")
             return {}
         input_state = {"paper": p.read_text(encoding="utf-8")}
+        stem = p.stem
 
     console.print()
     state = stream_review(input_state)
     render_report(state)
+    _try_annotate_pdf(state, stem)
     return state
 
 
