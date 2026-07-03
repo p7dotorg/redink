@@ -65,8 +65,8 @@ def _run_oneshot(target: str) -> None:
         out_path.write_text(f"# redink: {display_name}\n\n{report}", encoding="utf-8")
         console.print(f"\n  saved  [dim]{out_path}[/dim]")
 
-        from redink_cli.commands import _try_annotate_pdf
-        _try_annotate_pdf(final_state, stem)
+        from redink_cli.commands import _try_annotate
+        _try_annotate(final_state, stem)
 
 
 # ── chat REPL ─────────────────────────────────────────────────────────────────

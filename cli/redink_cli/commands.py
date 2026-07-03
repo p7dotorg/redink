@@ -9,30 +9,33 @@ console = Console()
 PERSONAS = ["skeptic", "practitioner", "academic"]
 
 
-def _try_annotate_pdf(state: dict, output_stem: str) -> None:
-    """If paper has an arXiv ID, download and annotate its PDF."""
+def _try_annotate(state: dict, output_stem: str) -> None:
+    """Generate interactive HTML report; also PDF if arXiv ID found."""
     from redink_core.nodes_helpers import extract_arxiv_id
-    from redink_cli.pdf_annotator import annotate, summary_page
+    from redink_cli.html_annotator import generate as html_generate
 
-    paper = state.get("paper", "")
-    arxiv_id = extract_arxiv_id(paper)
-    if not arxiv_id:
-        return
-
+    paper    = state.get("paper", "")
     findings = state.get("findings", [])
     verdict  = state.get("verdict")
-    if not findings:
+    if not findings or not verdict:
         return
 
-    out = Path(f"{output_stem}.annotated.pdf")
-    console.print(f"\n  [dim]annotating PDF {arxiv_id} ...[/dim]")
-    ok = annotate(arxiv_id, findings, out)
-    if ok:
-        if verdict:
-            summary_page(out, verdict)
-        console.print(f"  [#E8252A]●[/] annotated PDF  [dim]{out}[/dim]")
-    else:
-        console.print("  [dim]PDF annotation skipped (could not fetch arXiv PDF)[/dim]")
+    # Always generate HTML
+    html_out = Path(f"{output_stem}.annotated.html")
+    title = Path(output_stem).name
+    html_generate(paper, findings, verdict, html_out, title=title)
+    console.print(f"  [#E8252A]●[/] interactive report  [dim]{html_out}[/dim]")
+
+    # PDF only for arXiv papers
+    arxiv_id = extract_arxiv_id(paper)
+    if arxiv_id:
+        from redink_cli.pdf_annotator import annotate, summary_page
+        pdf_out = Path(f"{output_stem}.annotated.pdf")
+        console.print(f"  [dim]annotating PDF {arxiv_id} ...[/dim]")
+        if annotate(arxiv_id, findings, pdf_out):
+            if verdict:
+                summary_page(pdf_out, verdict)
+            console.print(f"  [#E8252A]●[/] annotated PDF     [dim]{pdf_out}[/dim]")
 
 
 def cmd_review(arg: str, stream_review, render_report) -> dict:
@@ -54,7 +57,7 @@ def cmd_review(arg: str, stream_review, render_report) -> dict:
     console.print()
     state = stream_review(input_state)
     render_report(state)
-    _try_annotate_pdf(state, stem)
+    _try_annotate(state, stem)
     return state
 
 
