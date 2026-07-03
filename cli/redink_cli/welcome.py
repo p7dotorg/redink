@@ -11,13 +11,13 @@ console = Console()
 
 VERSION = "0.1.0"
 
+_R = "#E8252A"  # brand red
+# layout matches SVG: eyes top, solid mid-body, arms lower, legs
 _MASCOT = (
-    "[red]  ██████████  [/red]\n"
-    "[red]  ██[/red][white]  [/white][red]██[/red][white]  [/white][red]██  [/red]\n"
-    "[red]████████████[/red]\n"
-    "[red]████[/red][dim]●[/dim][red]███████[/red]\n"
-    "[red]  ██████████  [/red]\n"
-    "[red]    ██  ██    [/red]"
+    f"  [{_R}]██[/{_R}]  [{_R}]████[/{_R}]  [{_R}]██[/{_R}]\n"
+    f"  [{_R}]██████████[/{_R}]\n"
+    f"[{_R}]███████[/{_R}][dim]●[/dim][{_R}]██████[/{_R}]\n"
+    f"    [{_R}]██[/{_R}]    [{_R}]██[/{_R}]"
 )
 
 TIPS = (
