@@ -207,10 +207,13 @@ def _annotate(paper_text: str, findings: list) -> tuple[str, list]:
         sev   = getattr(f, "severity", "minor")
         col, bg, _ = _SEVERITY_COLOR.get(sev, _SEVERITY_COLOR["minor"])
         icon  = _SEVERITY_ICON.get(sev, "·")
-        dim   = _html.escape(getattr(f, "dimension", ""))
-        per   = _html.escape(getattr(f, "persona", ""))
-        issue = _html.escape((getattr(f, "issue", "") or "")[:200])
-        fix   = _html.escape((getattr(f, "suggestion", "") or "")[:180])
+        dim      = _html.escape(getattr(f, "dimension", ""))
+        per      = _html.escape(getattr(f, "persona", ""))
+        evidence = _html.escape((getattr(f, "evidence", "") or ""))
+        issue_full = _html.escape((getattr(f, "issue", "") or ""))
+        fix_full   = _html.escape((getattr(f, "suggestion", "") or ""))
+        issue = issue_full[:220]   # preview in margin note
+        fix   = fix_full[:180]
 
         if start > pos:
             parts.append(_txt(paper_text[pos:start]))
@@ -225,7 +228,9 @@ def _annotate(paper_text: str, findings: list) -> tuple[str, list]:
         # Margin note + mobile tap-indicator after the mark (no leading newline)
         parts.append(
             f'<sup class="hl-tag" data-id="{fid}" style="color:{col}" title="tap for note">{icon}</sup>'
-            f'<aside class="note note-{sev}" data-id="{fid}" data-sev="{sev}" style="--nc:{col}">'
+            f'<aside class="note note-{sev}" data-id="{fid}" data-sev="{sev}" style="--nc:{col}"'
+            f' data-issue="{issue_full}" data-fix="{fix_full}" data-evidence="{evidence}"'
+            f' data-dim="{dim}" data-per="{per}" data-icon="{icon}">'
             f'<div class="note-header">'
             f'<span class="note-badge" style="color:{col}">{icon} {sev.upper()}</span>'
             f'<span class="note-tags">{dim} · {per}</span>'
@@ -257,9 +262,18 @@ _TEMPLATE = """\
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400&family=Lora:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;700&display=swap" rel="stylesheet">
 <script>
 MathJax = {{
-  tex: {{inlineMath: [['$','$'],['\\\\(','\\\\)']]}},
-  options: {{skipHtmlTags: ['script','style','pre','code']}},
-  startup: {{typeset: false}}
+  tex: {{inlineMath: [['$','$'],['\\\\(','\\\\)']],
+         displayMath:[['$$','$$'],['\\\\[','\\\\]']]}},
+  options: {{skipHtmlTags: ['script','style','pre','code','aside']}},
+  startup: {{
+    ready() {{
+      MathJax.startup.defaultReady();
+      // After MathJax finishes typesetting, re-align margin notes
+      MathJax.startup.promise.then(() => {{
+        if (typeof repositionNotes === 'function') repositionNotes();
+      }});
+    }}
+  }}
 }};
 </script>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -285,6 +299,7 @@ body{{
   background:var(--canvas-soft);
   color:var(--ink);
   min-height:100vh;
+  overflow-x:hidden;   /* notes may bleed past viewport on narrow screens */
 }}
 
 /* ── masthead band ── */
@@ -383,8 +398,7 @@ body{{
   background:var(--canvas);
   border:1px solid var(--hairline);
   border-top:2px solid var(--ink);       /* WIRED: heavy top rule */
-  padding:56px 64px 80px 64px;
-  padding-right:304px;
+  padding:56px 64px 80px 64px;          /* symmetric — notes float outside */
   position:relative;
 }}
 .paper-eyebrow{{
@@ -400,8 +414,6 @@ body{{
 .paper-header{{
   text-align:center;
   margin-bottom:40px;
-  /* extend into the right padding zone so it spans the full paper card */
-  margin-right:-240px;   /* cancels the extra right padding (304-64=240) */
 }}
 .ph-title{{
   font-family:'Lora','Georgia',serif;
@@ -431,7 +443,6 @@ body{{
 .ph-abs-label{{font-family:'Inter',sans-serif;font-weight:700;font-size:12px;letter-spacing:.4px;text-transform:uppercase}}
 .ph-rule{{border:none;border-top:1px solid var(--hairline);margin:28px 0}}
 @media(max-width:860px){{
-  .paper-header{{margin-right:0}}
   .ph-authors{{grid-template-columns:repeat(2,1fr)}}
   .ph-title{{font-size:20px}}
 }}
@@ -456,8 +467,7 @@ body{{
 .hl:hover{{filter:brightness(.82)}}
 .hl.dimmed{{opacity:.15;pointer-events:none}}
 .hl.active{{
-  outline:2px solid var(--ring,#000);
-  outline-offset:1px;
+  border-bottom-width:3px!important;
   animation:hl-flash .3s ease-out;
 }}
 
@@ -472,8 +482,8 @@ body{{
 /* ── margin notes — WIRED story-row aesthetic ── */
 aside.note{{
   position:absolute;
-  right:-264px;          /* sits in the paper's right padding zone */
-  width:240px;
+  right:-296px;          /* 12px gap outside paper's right border */
+  width:220px;
   background:var(--canvas);
   border:1px solid var(--hairline);
   border-left:3px solid var(--nc,#000);
@@ -487,11 +497,9 @@ aside.note{{
 aside.note:hover{{border-color:var(--ink-soft);border-left-color:var(--nc,#000)}}
 aside.note.hidden{{display:none!important}}
 
-/* focus mode */
-.paper-text.has-active aside.note:not(.active){{opacity:.28}}
+/* active note: thicker border, full opacity */
 aside.note.active{{
-  opacity:1!important;
-  border:2px solid var(--ink)!important;
+  border:1px solid var(--ink)!important;
   border-left:4px solid var(--nc,#000)!important;
 }}
 
@@ -548,7 +556,111 @@ aside.note.active{{
     border-right:1px solid var(--hairline);
     opacity:1;margin-bottom:12px;
   }}
-  .paper-text.has-active aside.note:not(.active){{opacity:1}}
+  /* detail panel becomes bottom sheet on mobile */
+  .dp{{
+    top:auto!important;bottom:0;right:0;
+    width:100%!important;max-height:70vh;
+    border-left:none!important;border-top:2px solid var(--ink);
+  }}
+}}
+
+/* ── detail panel ── */
+.dp{{
+  position:fixed;
+  top:49px;          /* just below masthead */
+  right:0;
+  width:360px;
+  height:calc(100vh - 49px);
+  background:var(--canvas);
+  border-left:2px solid var(--ink);
+  display:flex;flex-direction:column;
+  z-index:200;
+  transform:translateX(100%);
+  transition:transform .22s cubic-bezier(.4,0,.2,1);
+  overflow:hidden;
+}}
+.dp.open{{transform:translateX(0)}}
+.dp-backdrop{{
+  /* used only as click-trap to close panel — no visual dimming */
+  position:fixed;inset:0;z-index:199;
+  opacity:0;pointer-events:none;
+}}
+.dp-backdrop.show{{pointer-events:auto}}
+
+/* spotlight: dim the paper container; counter-brighten only the active highlight */
+.outer.dp-dimmed{{filter:brightness(.55);transition:filter .22s}}
+.outer.dp-dimmed .hl.active{{
+  filter:brightness(1.82);  /* .55 × 1.82 ≈ 1.0 — back to full */
+  position:relative;z-index:1;
+}}
+
+.dp-toolbar{{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;
+  border-bottom:1px solid var(--hairline);
+  height:44px;flex-shrink:0;
+}}
+.dp-nav-group{{display:flex;align-items:center;gap:4px}}
+.dp-nav-btn{{
+  font-size:13px;padding:4px 10px;
+  border:1px solid var(--hairline);border-radius:0;
+  background:transparent;cursor:pointer;color:var(--body-col);
+  transition:background .1s,color .1s;
+}}
+.dp-nav-btn:hover:not(:disabled){{background:var(--canvas-soft);color:var(--ink)}}
+.dp-nav-btn:disabled{{opacity:.3;cursor:default}}
+.dp-nav-pos{{font-family:'Inter',sans-serif;font-size:11px;color:var(--body-col);padding:0 6px}}
+.dp-close{{
+  font-size:12px;padding:4px 10px;
+  border:1px solid var(--hairline);border-radius:0;
+  background:transparent;cursor:pointer;color:var(--body-col);
+  transition:background .1s;
+}}
+.dp-close:hover{{background:var(--canvas-soft);color:var(--ink)}}
+
+.dp-body{{
+  flex:1;overflow-y:auto;
+  padding:24px 20px 40px;
+  display:flex;flex-direction:column;gap:16px;
+}}
+.dp-badge-row{{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}}
+.dp-badge{{
+  font-family:'Inter',sans-serif;font-size:11px;font-weight:700;
+  letter-spacing:.5px;text-transform:uppercase;
+}}
+.dp-tags{{font-family:'Inter',sans-serif;font-size:11px;color:var(--body-col)}}
+.dp-evidence{{
+  font-family:'Lora',serif;font-size:13px;font-style:italic;
+  color:var(--body-col);
+  padding:10px 14px;
+  background:var(--canvas-soft);
+  border-left:3px solid var(--hairline);
+  line-height:1.6;
+}}
+.dp-evidence::before{{content:'"';font-size:18px;line-height:0;vertical-align:-.3em;margin-right:2px;color:var(--hairline)}}
+.dp-evidence::after{{content:'"';font-size:18px;line-height:0;vertical-align:-.3em;margin-left:2px;color:var(--hairline)}}
+.dp-issue{{
+  font-family:'Lora',serif;font-size:14.5px;line-height:1.7;
+  color:var(--ink);
+}}
+.dp-fix{{
+  font-family:'Inter',sans-serif;font-size:12.5px;line-height:1.65;
+  color:var(--body-col);
+  padding-top:12px;
+  border-top:1px solid var(--hairline);
+}}
+.dp-fix::before{{content:'↳ Fix:  ';font-weight:700;color:var(--ink)}}
+.dp-footer{{
+  flex-shrink:0;
+  display:flex;align-items:center;gap:8px;
+  padding:12px 20px;
+  border-top:1px solid var(--hairline);
+  opacity:.4;
+}}
+.dp-footer-brand{{
+  font-family:'Playfair Display','Georgia',serif;
+  font-size:14px;letter-spacing:-.2px;
+  color:var(--ink);
 }}
 </style>
 </head>
@@ -592,6 +704,41 @@ aside.note.active{{
   </div>
 </div>
 
+<!-- Detail panel — slides in from right on note/highlight click -->
+<div id="detail-panel" class="dp" aria-hidden="true">
+  <div class="dp-toolbar">
+    <div id="dp-nav-group" class="dp-nav-group">
+      <button class="dp-nav-btn" id="dp-prev" disabled>&#8592;</button>
+      <span class="dp-nav-pos" id="dp-nav-pos"></span>
+      <button class="dp-nav-btn" id="dp-next" disabled>&#8594;</button>
+    </div>
+    <button class="dp-close" id="dp-close" aria-label="close">&#10005;</button>
+  </div>
+  <div class="dp-body">
+    <div id="dp-badge-row" class="dp-badge-row">
+      <span id="dp-badge" class="dp-badge"></span>
+      <span id="dp-tags" class="dp-tags"></span>
+    </div>
+    <div id="dp-evidence" class="dp-evidence"></div>
+    <div id="dp-issue" class="dp-issue"></div>
+    <div id="dp-fix" class="dp-fix"></div>
+  </div>
+  <div class="dp-footer">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 560" width="18" height="18" aria-hidden="true">
+      <rect x="80"  y="80"  width="400" height="320" fill="#E8252A"/>
+      <rect x="0"   y="280" width="80"  height="80"  fill="#E8252A"/>
+      <rect x="480" y="280" width="80"  height="80"  fill="#E8252A"/>
+      <rect x="160" y="160" width="40"  height="80"  fill="#ffffff"/>
+      <rect x="320" y="160" width="40"  height="80"  fill="#ffffff"/>
+      <rect x="200" y="400" width="40"  height="80"  fill="#E8252A"/>
+      <rect x="320" y="400" width="40"  height="80"  fill="#E8252A"/>
+      <rect x="330" y="290" width="20"  height="20"  fill="#1A1A1A"/>
+    </svg>
+    <span class="dp-footer-brand"><span style="color:var(--red)">red</span>ink</span>
+  </div>
+</div>
+<div id="dp-backdrop" class="dp-backdrop"></div>
+
 <script>
 const meta = {meta_json};
 const isMobile = () => window.innerWidth <= 860;
@@ -622,7 +769,6 @@ function deactivateAll() {{
   document.querySelectorAll('aside.note.active').forEach(n => n.classList.remove('active'));
   document.querySelectorAll('.hl.active').forEach(h => h.classList.remove('active'));
   document.querySelectorAll('aside.note.open').forEach(n => n.classList.remove('open'));
-  textEl.classList.remove('has-active');
 }}
 
 function activateId(id, scrollNote) {{
@@ -636,7 +782,6 @@ function activateId(id, scrollNote) {{
   hl.style.setProperty('--ring', ringCol);
   hl.classList.add('active');
   note.classList.add('active');
-  textEl.classList.add('has-active');
 
   if (isMobile()) {{
     note.classList.add('open');
@@ -651,17 +796,6 @@ function activateId(id, scrollNote) {{
   updateNav();
 }}
 
-// highlight clicks
-document.querySelectorAll('.hl').forEach(hl => {{
-  hl.addEventListener('click', e => {{
-    e.stopPropagation();
-    const id = hl.dataset.id;
-    const alreadyActive = hl.classList.contains('active');
-    if (alreadyActive) {{ deactivateAll(); curIdx = -1; updateNav(); return; }}
-    activateId(id, false);
-  }});
-}});
-
 // mobile tap-indicator clicks
 document.querySelectorAll('.hl-tag').forEach(tag => {{
   tag.addEventListener('click', e => {{
@@ -670,21 +804,10 @@ document.querySelectorAll('.hl-tag').forEach(tag => {{
   }});
 }});
 
-// note clicks (desktop → scroll to highlight; mobile handled by hl click above)
-document.querySelectorAll('aside.note').forEach(note => {{
-  note.addEventListener('click', e => {{
-    e.stopPropagation();
-    if (!isMobile()) {{
-      const alreadyActive = note.classList.contains('active');
-      if (alreadyActive) {{ deactivateAll(); curIdx = -1; updateNav(); return; }}
-      activateId(note.dataset.id, false);
-    }}
-  }});
-}});
-
-// click outside → deactivate
+// click outside → deactivate + close panel
 document.addEventListener('click', () => {{
   deactivateAll();
+  closeDetailPanel();
   curIdx = -1;
   updateNav();
 }});
@@ -700,19 +823,6 @@ nextBtn.addEventListener('click', e => {{
   hlList = visibleHls();
   if (curIdx < hlList.length - 1) {{ curIdx++; activateId(hlList[curIdx].dataset.id, true); }}
   else if (curIdx === -1 && hlList.length) {{ curIdx = 0; activateId(hlList[0].dataset.id, true); }}
-}});
-
-// keyboard
-document.addEventListener('keydown', e => {{
-  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {{
-    e.preventDefault();
-    nextBtn.click();
-  }} else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {{
-    e.preventDefault();
-    prevBtn.click();
-  }} else if (e.key === 'Escape') {{
-    deactivateAll(); curIdx = -1; updateNav();
-  }}
 }});
 
 // filters (severity buttons in masthead)
@@ -766,24 +876,135 @@ function repositionNotes() {{
   }});
 }}
 
+// ── detail panel ─────────────────────────────────────────────────────────────
+const dp          = document.getElementById('detail-panel');
+const dpBackdrop  = document.getElementById('dp-backdrop');
+const outerEl     = document.querySelector('.outer');
+const dpBadge     = document.getElementById('dp-badge');
+const dpTags      = document.getElementById('dp-tags');
+const dpEvidence  = document.getElementById('dp-evidence');
+const dpIssue     = document.getElementById('dp-issue');
+const dpFix       = document.getElementById('dp-fix');
+const dpNavPos    = document.getElementById('dp-nav-pos');
+const dpPrev      = document.getElementById('dp-prev');
+const dpNext      = document.getElementById('dp-next');
+const dpClose     = document.getElementById('dp-close');
+
+let dpOpen = false;
+let dpCurIdx = -1;
+
+function dpUpdateNav() {{
+  hlList = visibleHls();
+  dpPrev.disabled = dpCurIdx <= 0;
+  dpNext.disabled = dpCurIdx >= hlList.length - 1;
+  dpNavPos.textContent = hlList.length > 0 && dpCurIdx >= 0
+    ? `${{dpCurIdx + 1}}/${{hlList.length}}` : '';
+}}
+
+function openDetailPanel(id) {{
+  const note = document.querySelector(`aside.note[data-id="${{id}}"]`);
+  if (!note) return;
+
+  const sev   = note.dataset.sev || 'minor';
+  const col   = note.style.getPropertyValue('--nc') || '#888';
+  const icon  = note.dataset.icon || '·';
+
+  dpBadge.textContent = `${{icon}} ${{sev.toUpperCase()}}`;
+  dpBadge.style.color = col;
+  dpTags.textContent  = `${{note.dataset.dim}} · ${{note.dataset.per}}`;
+  dpEvidence.textContent = note.dataset.evidence || '';
+  dpIssue.textContent    = note.dataset.issue    || '';
+  dpFix.textContent      = note.dataset.fix      || '';
+
+  hlList = visibleHls();
+  dpCurIdx = hlList.findIndex(h => h.dataset.id === String(id));
+
+  dp.classList.add('open');
+  dpBackdrop.classList.add('show');
+  if (outerEl) outerEl.classList.add('dp-dimmed');
+  dp.setAttribute('aria-hidden', 'false');
+  dpOpen = true;
+  dpUpdateNav();
+}}
+
+function closeDetailPanel() {{
+  dp.classList.remove('open');
+  dpBackdrop.classList.remove('show');
+  if (outerEl) outerEl.classList.remove('dp-dimmed');
+  dp.setAttribute('aria-hidden', 'true');
+  dpOpen = false;
+}}
+
+dpClose.addEventListener('click', closeDetailPanel);
+dpBackdrop.addEventListener('click', closeDetailPanel);
+
+dpPrev.addEventListener('click', e => {{
+  e.stopPropagation();
+  hlList = visibleHls();
+  if (dpCurIdx > 0) {{
+    dpCurIdx--;
+    const id = hlList[dpCurIdx].dataset.id;
+    activateId(id, true);
+    openDetailPanel(id);
+  }}
+}});
+dpNext.addEventListener('click', e => {{
+  e.stopPropagation();
+  hlList = visibleHls();
+  if (dpCurIdx < hlList.length - 1) {{
+    dpCurIdx++;
+    const id = hlList[dpCurIdx].dataset.id;
+    activateId(id, true);
+    openDetailPanel(id);
+  }}
+}});
+
+// open panel on note click (desktop) and highlight click
+document.querySelectorAll('aside.note').forEach(note => {{
+  note.addEventListener('click', e => {{
+    e.stopPropagation();
+    if (!isMobile()) {{
+      const alreadyActive = note.classList.contains('active');
+      if (alreadyActive && dpOpen) {{ closeDetailPanel(); deactivateAll(); curIdx = -1; updateNav(); return; }}
+      activateId(note.dataset.id, false);
+      openDetailPanel(note.dataset.id);
+    }}
+  }});
+}});
+
+document.querySelectorAll('.hl').forEach(hl => {{
+  hl.addEventListener('click', e => {{
+    e.stopPropagation();
+    const id = hl.dataset.id;
+    const alreadyActive = hl.classList.contains('active');
+    if (alreadyActive) {{ deactivateAll(); closeDetailPanel(); curIdx = -1; updateNav(); return; }}
+    activateId(id, false);
+    openDetailPanel(id);
+  }});
+}});
+
+// close panel on Escape
+document.addEventListener('keydown', e => {{
+  if (e.key === 'Escape') {{
+    if (dpOpen) closeDetailPanel();
+    deactivateAll(); curIdx = -1; updateNav();
+  }}
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {{
+    e.preventDefault();
+    if (dpOpen) dpNext.click(); else nextBtn.click();
+  }} else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {{
+    e.preventDefault();
+    if (dpOpen) dpPrev.click(); else prevBtn.click();
+  }}
+}});
+
 // init
 updateNav();
-// wait for fonts then position notes (fonts change element heights)
+// wait for fonts then position notes (MathJax re-positions again via startup.ready)
 if (document.fonts && document.fonts.ready) {{
-  document.fonts.ready.then(() => {{
-    repositionNotes();
-    // typeset math after notes are placed; reposition once MathJax finishes
-    if (window.MathJax && MathJax.typesetPromise) {{
-      MathJax.typesetPromise([textEl]).then(repositionNotes);
-    }}
-  }});
+  document.fonts.ready.then(repositionNotes);
 }} else {{
-  window.addEventListener('load', () => {{
-    repositionNotes();
-    if (window.MathJax && MathJax.typesetPromise) {{
-      MathJax.typesetPromise([textEl]).then(repositionNotes);
-    }}
-  }});
+  window.addEventListener('load', repositionNotes);
 }}
 window.addEventListener('resize', repositionNotes);
 </script>

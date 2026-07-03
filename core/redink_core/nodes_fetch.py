@@ -13,9 +13,26 @@ _STRIP_BLOCKS = re.compile(
     re.DOTALL | re.IGNORECASE,
 )
 
+_MATH_RE = re.compile(
+    r'<math\b([^>]*)>.*?</math>',
+    re.DOTALL | re.IGNORECASE,
+)
+
+def _replace_math(m: re.Match) -> str:
+    """Swap <math> elements for their LaTeX alttext so MathJax can render it."""
+    attrs = m.group(1)
+    alttext_m = re.search(r'\balttext="([^"]*)"', attrs)
+    if not alttext_m:
+        return " "
+    latex = alttext_m.group(1)
+    is_block = 'display="block"' in attrs or "display='block'" in attrs
+    return f" $${latex}$$ " if is_block else f" ${latex}$ "
+
+
 def _html_to_text(html: str) -> str:
-    """Strip script/style blocks then all tags; collapse whitespace."""
-    text = _STRIP_BLOCKS.sub(" ", html)
+    """Extract readable text from HTML; preserve LaTeX math as $...$ tokens."""
+    text = _MATH_RE.sub(_replace_math, html)
+    text = _STRIP_BLOCKS.sub(" ", text)
     text = re.sub(r"<[^>]+>", " ", text)
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
