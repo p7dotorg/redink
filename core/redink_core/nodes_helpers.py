@@ -61,10 +61,27 @@ def tool_loop(model_with_tools, messages: list, max_rounds: int = 5) -> str:
     return response.content if response else ""
 
 
+_EXCERPT_LIMIT = 60000
+
+_TRUNCATION_NOTICE = (
+    "[AVISO AO REVISOR: o texto abaixo é um EXCERTO — o paper completo tem "
+    "{total} caracteres e você vê apenas {shown}. Seções finais (experimentos "
+    "tardios, hiperparâmetros, apêndices, referências) podem estar na parte "
+    "omitida. NUNCA reporte como problema a AUSÊNCIA de algo que pode estar "
+    "no trecho não mostrado — reporte apenas problemas visíveis neste texto.]\n\n"
+)
+
+
 def reviewer_excerpt(paper: str, dim: str) -> str:
-    """Truncate long papers: citations gets front+tail, others get first 20k."""
-    if len(paper) <= 20000:
+    """Truncate long papers: citations gets front+tail, others get first 60k.
+    Truncated excerpts carry an explicit notice so reviewers never treat
+    absence-from-excerpt as absence-from-paper."""
+    if len(paper) <= _EXCERPT_LIMIT:
         return paper
     if dim == "citations":
-        return paper[:6000] + "\n\n[... body omitted ...]\n\n" + paper[-6000:]
-    return paper[:20000]
+        excerpt = paper[:8000] + "\n\n[... corpo do paper omitido ...]\n\n" + paper[-8000:]
+        shown = "o início e o fim (16k caracteres)"
+    else:
+        excerpt = paper[:_EXCERPT_LIMIT] + "\n\n[... restante do paper omitido ...]"
+        shown = f"os primeiros {_EXCERPT_LIMIT} caracteres"
+    return _TRUNCATION_NOTICE.format(total=len(paper), shown=shown) + excerpt

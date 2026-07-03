@@ -88,6 +88,9 @@ Retorne sua análise como findings. Para cada problema:
 - suggestion: o que o autor deve corrigir
 
 Máximo 4 findings. Cada campo com no máximo 2 frases.
+O campo evidence deve ser um trecho LITERAL do texto fornecido.
+Se o texto do paper estiver marcado como EXCERTO, não reporte ausência de
+seções, hiperparâmetros ou experimentos que podem estar na parte omitida.
 """
 
 CONTRADICTION_MAP_PROMPT = """

@@ -17,10 +17,21 @@ def _structured_findings(
     )
     result = structured.invoke([
         SystemMessage(content=(
-            "Converta a análise em findings estruturados. "
-            "Severity: critical, major ou minor. Máximo 4 findings. "
+            "Converta a análise em findings estruturados. Máximo 4 findings. "
             f"O campo dimension deve ser sempre '{dim}'. "
-            f"O campo persona deve ser sempre '{persona}'."
+            f"O campo persona deve ser sempre '{persona}'.\n\n"
+            "RUBRICA DE SEVERIDADE — aplique com rigor:\n"
+            "• critical — erro que INVALIDA uma conclusão central do paper, com "
+            "evidência citável do texto (quote literal no campo evidence). "
+            "Ex: resultado principal sem controle, contradição factual demonstrada.\n"
+            "• major — falha real que enfraquece o trabalho mas não invalida a "
+            "conclusão central. Ex: ablação ausente, comparação assimétrica, "
+            "métrica sem intervalo de confiança.\n"
+            "• minor — melhoria de clareza, completude ou estilo.\n\n"
+            "Regras: na dúvida entre dois níveis, escolha o MAIS BRANDO. "
+            "Ausência de algo que pode estar em seção não mostrada NUNCA é critical. "
+            "Crítica de tom/linguagem (título forte, claim otimista) é no máximo minor. "
+            "O campo evidence deve conter um trecho LITERAL do paper, não paráfrase."
         )),
         HumanMessage(content=f"Dimensão: {dim}\nPersona: {persona}\n\nAnálise:\n{analysis_text[:5000]}"),
     ])
@@ -71,7 +82,7 @@ def reviewer(state, config: RunnableConfig = None):
                 f"{header}\n\n"
                 f"Citações listadas: {'; '.join(real_citations[:20])}\n\n"
                 "Avalie: as claims centrais estão adequadamente suportadas pelas referências? "
-                "Há claims importantes sem citação?\n\nPAPER:\n{paper}"
+                f"Há claims importantes sem citação?\n\nPAPER:\n{paper}"
             )),
         ])
         analysis_text = response.content
