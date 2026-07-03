@@ -1,16 +1,11 @@
-"""Tools for paper reviewer — each tool does exactly one thing."""
+"""LangChain tools for the reviewer nodes — each does exactly one thing."""
 import os
-import re
 
 import httpx
 from langchain_core.tools import tool
 
-from paper.paper7 import paper7_search, paper7_get, arxiv_api_search
+from redink_core.paper7 import paper7_search, paper7_get, arxiv_api_search
 
-
-# ---------------------------------------------------------------------------
-# @tool definitions — single responsibility each
-# ---------------------------------------------------------------------------
 
 @tool
 def search_papers(query: str) -> str:
@@ -25,12 +20,13 @@ def search_papers(query: str) -> str:
             if r.status_code == 200:
                 results = r.json()
                 if results:
-                    lines = [f"[{r.get('id', r.get('arxivId', ''))}] {r.get('title', '')}" for r in results[:5]]
-                    return "\n".join(lines)
+                    return "\n".join(
+                        f"[{r.get('id', r.get('arxivId', ''))}] {r.get('title', '')}"
+                        for r in results[:5]
+                    )
         except Exception:
             pass
 
-    # Semantic Scholar first — broad cross-disciplinary coverage
     results = arxiv_api_search(query, max_results=5)
     if not results:
         results = paper7_search(query, max_results=5)
@@ -81,71 +77,19 @@ def verify_doi(doi: str) -> str:
             return f"DOI {doi} not found in Crossref — possible hallucinated citation."
         if r.status_code != 200:
             return f"Crossref returned {r.status_code} for DOI {doi}."
-        w = r.json().get("message", {})
-        title = (w.get("title") or [""])[0]
+        w       = r.json().get("message", {})
+        title   = (w.get("title") or [""])[0]
         authors = ", ".join(
             f"{a.get('given', '')} {a.get('family', '')}".strip()
             for a in w.get("author", [])[:3]
         )
         journal = (w.get("container-title") or [""])[0]
-        year = (w.get("published", {}).get("date-parts") or [[""]])[0][0]
+        year    = (w.get("published", {}).get("date-parts") or [[""]])[0][0]
         return f"FOUND: '{title}' by {authors} — {journal} ({year})"
     except Exception as e:
         return f"Error looking up DOI: {e}"
 
 
-# Tools passed to bind_tools() in reviewer nodes
+# Tool lists passed to bind_tools() in reviewer nodes
 REVIEWER_TOOLS = [search_papers, get_paper, verify_doi]
-NOVELTY_TOOLS = [search_arxiv, get_paper]
-
-
-# ---------------------------------------------------------------------------
-# Figure extraction (vision pipeline — not a LangChain tool)
-# ---------------------------------------------------------------------------
-
-_AR5IV_BASE = "https://ar5iv.labs.arxiv.org/html"
-
-
-def extract_figures(arxiv_id: str, max_figures: int = 6) -> list[dict]:
-    """Fetch ar5iv HTML and extract figure URLs + captions. Returns [{url, caption}]."""
-    url = f"{_AR5IV_BASE}/{arxiv_id}"
-    try:
-        r = httpx.get(url, timeout=20, follow_redirects=True,
-                      headers={"User-Agent": "redink/0.1"})
-        if r.status_code != 200:
-            return []
-    except Exception:
-        return []
-
-    html = r.text
-    figures = []
-
-    for fig_html in re.findall(r"<figure[^>]*>(.*?)</figure>", html, re.DOTALL | re.IGNORECASE):
-        img_match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', fig_html, re.IGNORECASE)
-        if not img_match:
-            continue
-        src = img_match.group(1)
-
-        if src.endswith(".svg") or "icon" in src.lower():
-            continue
-
-        if src.startswith("http"):
-            img_url = src
-        elif src.startswith("//"):
-            img_url = "https:" + src
-        elif src.startswith("/"):
-            img_url = "https://ar5iv.labs.arxiv.org" + src
-        else:
-            img_url = f"{_AR5IV_BASE}/{arxiv_id}/{src.lstrip('/')}"
-
-        cap_match = re.search(r"<figcaption[^>]*>(.*?)</figcaption>", fig_html, re.DOTALL | re.IGNORECASE)
-        caption = ""
-        if cap_match:
-            caption = re.sub(r"<[^>]+>", " ", cap_match.group(1)).strip()
-            caption = re.sub(r"\s+", " ", caption)[:300]
-
-        figures.append({"url": img_url, "caption": caption})
-        if len(figures) >= max_figures:
-            break
-
-    return figures
+NOVELTY_TOOLS  = [search_arxiv, get_paper]

@@ -6,7 +6,7 @@ from langchain_core.messages import ToolMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 
-from paper.tools import REVIEWER_TOOLS, NOVELTY_TOOLS
+from redink_core.tools import REVIEWER_TOOLS, NOVELTY_TOOLS
 
 _ARXIV_ID_RE = re.compile(r"(?:arXiv[:/])?(\d{4}\.\d{4,5})(?:v\d+)?", re.IGNORECASE)
 _ALL_TOOLS = {t.name: t for t in REVIEWER_TOOLS + NOVELTY_TOOLS}
@@ -59,3 +59,12 @@ def tool_loop(model_with_tools, messages: list, max_rounds: int = 5) -> str:
             result = tool.invoke(tc["args"]) if tool else f"Unknown tool: {tc['name']}"
             messages.append(ToolMessage(content=str(result), tool_call_id=tc["id"]))
     return response.content if response else ""
+
+
+def reviewer_excerpt(paper: str, dim: str) -> str:
+    """Truncate long papers: citations gets front+tail, others get first 20k."""
+    if len(paper) <= 20000:
+        return paper
+    if dim == "citations":
+        return paper[:6000] + "\n\n[... body omitted ...]\n\n" + paper[-6000:]
+    return paper[:20000]

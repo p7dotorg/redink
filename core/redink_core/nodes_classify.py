@@ -2,8 +2,8 @@
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
-from paper.nodes_helpers import make_model
-from paper.schemas import Classification
+from redink_core.nodes_helpers import make_model
+from redink_core.schemas import Classification
 
 _CLASSIFY_SYSTEM = """\
 Você é um especialista em análise de papers acadêmicos. Classifique com precisão.

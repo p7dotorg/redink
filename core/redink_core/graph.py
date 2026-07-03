@@ -9,8 +9,8 @@ load_dotenv()
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import Send
 
-from paper.schemas import Classification, Finding, Verdict, ContradictionMap, BlindSpot
-from paper.nodes import fetch_paper, classify, reviewer, figure_reviewer, contradiction_map, blind_spot, synthesize
+from redink_core.schemas import Classification, Finding, Verdict, ContradictionMap, BlindSpot
+from redink_core.nodes import fetch_paper, classify, reviewer, figure_reviewer, contradiction_map, blind_spot, synthesize
 
 PERSONAS = ["skeptic", "practitioner", "academic"]
 

@@ -1,0 +1,47 @@
+"""Tool instructions and conciseness constraints for reviewer nodes."""
+
+CONCISENESS = "\n\nIMPORTANTE: Máximo 4 findings, cada um com no máximo 3 frases."
+
+TOOL_INSTRUCTIONS = {
+    "citations": (
+        "Você tem 3 ferramentas:\n"
+        "• search_papers(query) — busca no Semantic Scholar (cobertura ampla: CS, psicologia, filosofia, medicina)\n"
+        "• get_paper(arxiv_id) — lê abstract de paper arXiv (use se resultado tiver ID arXiv)\n"
+        "• verify_doi(doi) — confirma via Crossref (use se DOI estiver explícito no texto)\n\n"
+        "PASSO 0 — OBRIGATÓRIO antes de qualquer busca:\n"
+        "  Localize a seção 'References' no texto do paper abaixo.\n"
+        "  Para cada citação curta (ex: 'Flavell (1979)'), encontre a entrada COMPLETA na seção References.\n"
+        "  Use SEMPRE palavras-chave do título completo na busca — NUNCA busque 'Autor (ano)' isolado.\n\n"
+        "REGRA DE OURO — referência COM periódico + volume + página = quase certamente REAL:\n"
+        "  Se a entrada na seção References tem formato 'Título. Periódico, vol(num):pp, ano',\n"
+        "  a citação é provavelmente válida. Foque buscas em citações SEM detalhes.\n\n"
+        "QUANDO marcar NÃO ENCONTRADO — APENAS se:\n"
+        "  (a) A entrada na seção References está incompleta (sem título ou periódico) E\n"
+        "  (b) Semantic Scholar não retorna o paper após 2 buscas com palavras do título E\n"
+        "  (c) O autor ou título parece implausível (genérico demais, inconsistente com a área)\n"
+        "  Papers de psicologia/filosofia/medicina pré-2000 são reais mas raramente estão no arXiv.\n\n"
+        "FORMATO OBRIGATÓRIO:\n"
+        "  • VERIFICADO: [título] — encontrado\n"
+        "  • MISMATCH: [título] — encontrado mas conteúdo diverge\n"
+        "  • NÃO ENCONTRADO: [título] — incompleto E ausente no Semantic Scholar após ≥2 buscas\n\n"
+        "NUNCA critique citação genérica sem título exato. "
+        "NUNCA marque clássicos pré-2000 com periódico+página como suspeitos. "
+        "NUNCA inclua processo de busca — apenas resultados."
+    ),
+    "novelty": (
+        "Você tem 2 ferramentas:\n"
+        "• search_arxiv(query) — busca no arXiv via paper7 CLI (rápido, cobertura completa de CS/AI/ML)\n"
+        "• get_paper(arxiv_id) — lê o abstract para comparar com as claims do paper\n\n"
+        "Estratégia: para cada claim central do paper, faça ≥1 busca específica.\n"
+        "Use queries técnicas com verbos e conceitos precisos — NÃO use o título do paper como query.\n"
+        "Ex: para 'memory management como skill treinável em LLMs' → busque:\n"
+        "  'LLM agent memory optimization fine-tuning'\n"
+        "  'automated scaffold revision LLM agent'\n\n"
+        "FORMATO OBRIGATÓRIO dos findings:\n"
+        "  • PRIOR WORK: [título arXiv:XXXX] já faz X → claim Y do paper é incremental\n"
+        "  • NÃO ENCONTRADO: busca por [query] não retornou prior work → claim parece original\n\n"
+        "NUNCA critique metodologia geral ou generalidades. "
+        "NUNCA inclua tentativas de busca — apenas resultados com título e arXiv ID. "
+        "NUNCA marque como incremental sem citar paper específico encontrado."
+    ),
+}

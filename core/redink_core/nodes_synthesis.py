@@ -4,9 +4,9 @@ from collections import Counter
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
-from paper.nodes_helpers import make_model
-from paper.prompts import CONTRADICTION_MAP_PROMPT, BLIND_SPOT_PROMPT
-from paper.schemas import Finding, Verdict, ContradictionMap, BlindSpot
+from redink_core.nodes_helpers import make_model
+from redink_core.prompts import CONTRADICTION_MAP_PROMPT, BLIND_SPOT_PROMPT
+from redink_core.schemas import Finding, Verdict, ContradictionMap, BlindSpot
 
 
 def contradiction_map(state, config: RunnableConfig = None):
