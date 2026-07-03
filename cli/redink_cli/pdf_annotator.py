@@ -120,5 +120,9 @@ def summary_page(doc_path: str | Path, verdict) -> None:
 
     page.insert_text((60, y), "Annotated findings follow in the paper →", fontsize=10, color=GRAY, fontname="helv")
 
-    doc.save(str(doc_path), incremental=False, garbage=4, deflate=True)
+    # PyMuPDF can't save non-incrementally onto the file it was opened from,
+    # and inserting a page rules out incremental save — write a sibling and swap.
+    tmp_path = Path(doc_path).with_suffix(".tmp.pdf")
+    doc.save(str(tmp_path), garbage=4, deflate=True)
     doc.close()
+    tmp_path.replace(doc_path)
