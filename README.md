@@ -1,5 +1,9 @@
 # redink
 
+<p align="center">
+  <img src="assets/logo.svg" width="120" alt="redink logo"/>
+</p>
+
 Adversarial pre-submission paper red-teamer. Uses a STORM-style multi-persona LangGraph workflow to find citation hallucinations, statistical weaknesses, novelty gaps, and writing problems before a real reviewer does.
 
 ## Architecture
