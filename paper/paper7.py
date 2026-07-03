@@ -58,7 +58,7 @@ def arxiv_api_search(query: str, max_results: int = 5) -> list[dict]:
                 url,
                 params={"query": query[:200], "fields": "title,year,externalIds", "limit": max_results},
                 timeout=15,
-                headers={"User-Agent": "p7-reviewer/0.1"},
+                headers={"User-Agent": "redink/0.1"},
             )
             if r.status_code == 429:
                 continue

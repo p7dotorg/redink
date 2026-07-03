@@ -75,7 +75,7 @@ def verify_doi(doi: str) -> str:
         r = httpx.get(
             f"https://api.crossref.org/works/{doi}",
             timeout=10,
-            headers={"User-Agent": "p7-reviewer/0.1 (mailto:review@example.com)"},
+            headers={"User-Agent": "redink/0.1 (mailto:review@example.com)"},
         )
         if r.status_code == 404:
             return f"DOI {doi} not found in Crossref — possible hallucinated citation."
@@ -111,7 +111,7 @@ def extract_figures(arxiv_id: str, max_figures: int = 6) -> list[dict]:
     url = f"{_AR5IV_BASE}/{arxiv_id}"
     try:
         r = httpx.get(url, timeout=20, follow_redirects=True,
-                      headers={"User-Agent": "p7-reviewer/0.1"})
+                      headers={"User-Agent": "redink/0.1"})
         if r.status_code != 200:
             return []
     except Exception:

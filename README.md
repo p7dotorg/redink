@@ -1,6 +1,6 @@
-# p7-reviewer
+# redink
 
-Adversarial pre-submission paper reviewer. Uses a STORM-style multi-persona LangGraph workflow to red-team academic papers before publication — finding citation hallucinations, statistical weaknesses, novelty gaps, and writing problems before a real reviewer does.
+Adversarial pre-submission paper red-teamer. Uses a STORM-style multi-persona LangGraph workflow to find citation hallucinations, statistical weaknesses, novelty gaps, and writing problems before a real reviewer does.
 
 ## Architecture
 
@@ -60,20 +60,20 @@ cp .env.example .env
 
 ```bash
 # Review a local paper (markdown or plain text)
-p7review my-paper.md
+redink my-paper.md
 
 # Review from a GitHub repo (fetches README.md)
-p7review https://github.com/user/paper-repo
+redink https://github.com/user/paper-repo
 
 # Review from arXiv
-p7review https://arxiv.org/abs/2607.01224
+redink https://arxiv.org/abs/2607.01224
 ```
 
 The report is printed to stdout and saved as `<paper>.review.md`.
 
 ## LangGraph Studio
 
-The graph is registered in `langgraph.json` as `paper_reviewer`.
+The graph is registered in `langgraph.json` as `redink` and visible in Studio as **redink**.
 
 ```bash
 pip install langgraph-cli
@@ -138,4 +138,4 @@ Long papers are truncated before being sent to models:
 | `reviewer` (citations) | first 6k + last 6k chars | intro (context) + references section |
 | `reviewer` (others) | first 20k chars | covers abstract + methods + results for most papers |
 
-Part of [p7dotorg](https://github.com/p7dotorg).
+Part of [p7dotorg](https://github.com/p7dotorg). · [redink.sh](https://redink.sh)

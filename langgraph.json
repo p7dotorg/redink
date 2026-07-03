@@ -3,7 +3,7 @@
   "dependencies": ["."],
   "graphs": {
     "agent": "./agent.py:graph",
-    "paper_reviewer": "./paper/graph.py:graph"
+    "redink": "./paper/graph.py:graph"
   },
   "env": ".env"
 }

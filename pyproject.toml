@@ -3,13 +3,13 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "p7-reviewer"
+name = "redink"
 version = "0.1.0"
-description = "Adversarial pre-submission paper reviewer — red-teams academic papers before publication"
+description = "Adversarial pre-submission paper red-teamer — finds flaws before a real reviewer does"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-keywords = ["paper-review", "academic", "llm", "langgraph", "adversarial"]
+keywords = ["red-team", "paper-review", "academic", "llm", "langgraph", "adversarial"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
@@ -28,11 +28,11 @@ dependencies = [
 ]
 
 [project.scripts]
-p7review = "paper.cli:main"
+redink = "paper.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/p7dotorg/paper-reviewer"
-Issues   = "https://github.com/p7dotorg/paper-reviewer/issues"
+Homepage = "https://github.com/p7dotorg/redink"
+Issues   = "https://github.com/p7dotorg/redink/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["paper"]

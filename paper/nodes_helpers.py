@@ -37,7 +37,7 @@ def make_model(
         model=os.getenv(model_env_key, default),
         base_url="https://openrouter.ai/api/v1",
         api_key=get_api_key(config),
-        default_headers={"HTTP-Referer": "http://localhost:2024", "X-Title": "p7-reviewer"},
+        default_headers={"HTTP-Referer": "http://localhost:2024", "X-Title": "redink"},
         temperature=0,
     )
     if max_tokens:
