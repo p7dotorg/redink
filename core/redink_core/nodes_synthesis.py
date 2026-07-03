@@ -1,16 +1,24 @@
-"""contradiction_map, blind_spot, and synthesize nodes."""
+"""contradiction_map, blind_spot, judge_panel, and synthesize nodes."""
+from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
+
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
 from redink_core.nodes_helpers import make_model
-from redink_core.prompts import CONTRADICTION_MAP_PROMPT, BLIND_SPOT_PROMPT, DEDUP_PROMPT
-from redink_core.schemas import Finding, Verdict, ContradictionMap, BlindSpot, DedupMap
+from redink_core.prompts import (
+    CONTRADICTION_MAP_PROMPT, BLIND_SPOT_PROMPT, DEDUP_PROMPT,
+    JUDGE_LENSES, JUDGE_PANEL_PROMPT,
+)
+from redink_core.schemas import (
+    Finding, Verdict, ContradictionMap, BlindSpot, DedupMap, JudgeVote, JudgePanel,
+)
 
 _SEV_RANK = {"critical": 0, "major": 1, "minor": 2}
 
 
 def contradiction_map(state, config: RunnableConfig = None):
-    findings = state["findings"]
+    findings = state.get("deduped_findings") or state["findings"]
     clf = state["classification"]
     # Cap at 30 most severe findings to keep prompt manageable
     ranked = sorted(findings, key=lambda x: {"critical": 0, "major": 1, "minor": 2}[x.severity])[:30]
@@ -31,7 +39,7 @@ def contradiction_map(state, config: RunnableConfig = None):
 
 
 def blind_spot(state, config: RunnableConfig = None):
-    findings = state["findings"]
+    findings = state.get("deduped_findings") or state["findings"]
     clf = state["classification"]
     covered = "\n".join(f"- [{f.persona}/{f.dimension}] {f.issue[:80]}" for f in findings)
     model = make_model("STRUCTURED_MODEL", "openai/gpt-4o-mini", BlindSpot, max_tokens=4000, config=config)
@@ -98,26 +106,76 @@ def _dedup_findings(findings: list[Finding], config: RunnableConfig = None) -> l
     return _apply_clusters(findings, result.clusters)
 
 
+def judge_panel(state, config: RunnableConfig = None):
+    """Three judges with distinct lenses vote PASS/REVISE/FAIL on the
+    post-debate findings. Majority wins; a three-way split lands on REVISE."""
+    findings = state.get("deduped_findings") or state.get("findings", [])
+    clf = state["classification"]
+
+    listing = "\n".join(
+        f"- [{f.severity.upper()}] {f.dimension}"
+        + (f" · debate: {f.debate_outcome}" if f.debate_outcome else "")
+        + f" · {f.issue[:200]}"
+        for f in sorted(findings, key=lambda x: _SEV_RANK[x.severity])[:40]
+    )
+    case = (
+        f"Paper: {clf.area} — {clf.paper_type}\n"
+        f"Claims centrais: {'; '.join(clf.claims[:5])}\n\n"
+        f"FINDINGS CONSOLIDADOS:\n{listing}\n\n"
+        f"INÍCIO DO PAPER:\n{(state.get('paper') or '')[:6000]}"
+    )
+
+    def _vote(lens_key: str) -> JudgeVote | None:
+        model = make_model("STRUCTURED_MODEL", "openai/gpt-4o-mini",
+                           JudgeVote, max_tokens=800, config=config)
+        try:
+            v = model.invoke([
+                SystemMessage(content=JUDGE_PANEL_PROMPT.format(lens=JUDGE_LENSES[lens_key])),
+                HumanMessage(content=case),
+            ])
+        except Exception:
+            return None
+        if isinstance(v, JudgeVote):
+            v.lens = lens_key
+            return v
+        return None
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        votes = [v for v in pool.map(_vote, list(JUDGE_LENSES)) if v]
+
+    if not votes:
+        return {"judge_votes": None}
+    top, top_n = Counter(v.vote for v in votes).most_common(1)[0]
+    verdict = top if top_n >= 2 else "REVISE"
+    return {"judge_votes": JudgePanel(votes=votes, verdict=verdict)}
+
+
 def synthesize(state, config: RunnableConfig = None):
     clf = state["classification"]
     c_map = state.get("contradiction_map")
     b_spots = state.get("blind_spots")
+    panel = state.get("judge_votes")
 
-    findings = _dedup_findings(state["findings"], config)
+    # debate node already deduped; fall back for direct invocations (/rerun, tests)
+    findings = state.get("deduped_findings") or _dedup_findings(state["findings"], config)
 
     critical = [f for f in findings if f.severity == "critical"]
     major = [f for f in findings if f.severity == "major"]
     minor = [f for f in findings if f.severity == "minor"]
 
     high_confidence = [f.issue for f in findings if f.confidence >= 9]
-    consensus_criticals = [f for f in critical if f.confidence >= 9]
 
-    if len(consensus_criticals) >= 2 or len(critical) >= 3:
-        status = "FAIL"
-    elif critical or len(major) >= 3:
-        status = "REVISE"
+    if panel:
+        status = panel.verdict
     else:
-        status = "PASS"
+        # threshold fallback when the panel didn't run
+        consensus_criticals = [f for f in critical if f.confidence >= 9]
+        if len(consensus_criticals) >= 2 or len(critical) >= 3:
+            status = "FAIL"
+        elif critical or len(major) >= 3:
+            status = "REVISE"
+        else:
+            status = "PASS"
 
     findings_text = "\n\n".join(
         f"[{f.severity.upper()}][{f.persona}] {f.dimension}: {f.issue}\n"
@@ -134,12 +192,22 @@ def synthesize(state, config: RunnableConfig = None):
             extra += "\nCONSENSO: " + "; ".join(c_map.consensus[:3])
     if b_spots and b_spots.topics_not_covered:
         extra += "\n\nBLIND SPOTS: " + "; ".join(b_spots.topics_not_covered[:3])
+    if panel:
+        extra += "\n\nPAINEL DE JUÍZES:\n" + "\n".join(
+            f"- [{v.lens}] {v.vote}: {v.rationale}" for v in panel.votes
+        )
+    debated = [f for f in findings if f.debate_outcome]
+    if debated:
+        extra += "\n\nDEBATE (criticals contestados pela defesa do autor):\n" + "\n".join(
+            f"- [{f.debate_outcome}] {f.issue[:120]}" for f in debated
+        )
 
     model = make_model("SYNTHESIZE_MODEL", "deepseek/deepseek-v4-flash", config=config)
     summary = model.invoke([
         SystemMessage(content=(
             "Você é um meta-revisor STORM. Escreva um parágrafo de veredito integrando "
-            "findings, contradições entre personas, consensos e blind spots."
+            "findings, o resultado do debate adversarial, os votos do painel de juízes, "
+            "consensos e blind spots. O status já foi decidido pelo painel — justifique-o."
         )),
         HumanMessage(content=(
             f"Paper: {clf.area} — {clf.paper_type}\nStatus: {status}\n"
@@ -152,6 +220,6 @@ def synthesize(state, config: RunnableConfig = None):
         status=status, summary=summary.content,
         critical_count=len(critical), major_count=len(major), minor_count=len(minor),
         findings=sorted(findings, key=lambda f: _SEV_RANK[f.severity]),
-        contradiction_map=c_map, blind_spots=b_spots,
+        contradiction_map=c_map, blind_spots=b_spots, judge_panel=panel,
         high_confidence_issues=high_confidence,
     )}

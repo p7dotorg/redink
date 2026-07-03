@@ -60,6 +60,14 @@ class Finding(BaseModel):
         default=True,
         description="True se o trecho de evidence foi localizado no texto do paper"
     )
+    debate_outcome: Optional[Literal["sustained", "downgraded", "dismissed"]] = Field(
+        default=None,
+        description="Resultado do debate adversarial (apenas findings critical passam por ele)"
+    )
+    defense: Optional[str] = Field(
+        default=None,
+        description="Melhor argumento da defesa do autor durante o debate"
+    )
 
 
 class FindingsList(BaseModel):
@@ -117,6 +125,31 @@ class BlindSpot(BaseModel):
     )
 
 
+class Rebuttal(BaseModel):
+    ruling: Literal["sustain", "downgrade", "dismiss"] = Field(
+        description=(
+            "dismiss = finding factualmente errado ou já endereçado pelo paper; "
+            "downgrade = problema real mas não invalida conclusão central (não é critical); "
+            "sustain = crítica sólida no nível critical mesmo após a defesa"
+        )
+    )
+    defense_summary: str = Field(description="O ponto mais forte da defesa, em 1-2 frases")
+    reasoning: str = Field(description="Justificativa da decisão em 1-2 frases")
+
+
+class JudgeVote(BaseModel):
+    lens: str = ""
+    vote: Literal["PASS", "REVISE", "FAIL"] = Field(
+        description="PASS = aceitar; REVISE = major revision; FAIL = rejeitar"
+    )
+    rationale: str = Field(description="Justificativa do voto em 2-3 frases")
+
+
+class JudgePanel(BaseModel):
+    votes: list[JudgeVote]
+    verdict: Literal["PASS", "REVISE", "FAIL"]
+
+
 class Verdict(BaseModel):
     status: Literal["PASS", "REVISE", "FAIL"]
     summary: str = Field(description="Parágrafo resumindo o veredito geral com foco nas contradições")
@@ -126,6 +159,7 @@ class Verdict(BaseModel):
     findings: list[Finding]
     contradiction_map: Optional[ContradictionMap] = None
     blind_spots: Optional[BlindSpot] = None
+    judge_panel: Optional[JudgePanel] = None
     high_confidence_issues: list[str] = Field(
         default_factory=list,
         description="Problemas que todas as personas concordaram — certeza máxima"

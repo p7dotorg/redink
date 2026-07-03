@@ -29,6 +29,8 @@ def _build_display(
     classify_detail: str,
     reviewer_grid: dict,
     figures_count: int | None,
+    debate_detail: str = "",
+    judge_detail: str = "",
 ) -> Group:
     lines: list = []
 
@@ -107,6 +109,18 @@ def _build_display(
         lines.append(tbl)
         lines.append(Text(""))
 
+    # ── debate ─────────────────────────────────────────────────────────────
+    sym, sty = _icon(step_status.get("debate", "waiting"))
+    t = Text()
+    t.append(f"  {sym} ", style=sty)
+    t.append(f"{'debate':<18}", style="bold")
+    if step_status.get("debate") == "done":
+        t.append("done", style="green")
+        if debate_detail:
+            t.append("  ·  ", style="dim")
+            t.append(debate_detail, style="dim")
+    lines.append(t)
+
     # ── contradiction_map ──────────────────────────────────────────────────
     sym, sty = _icon(step_status.get("contradictions", "waiting"))
     t = Text()
@@ -123,6 +137,18 @@ def _build_display(
     t.append(f"{'blind spots':<18}", style="bold")
     if step_status.get("blind_spots") == "done":
         t.append("done", style="green")
+    lines.append(t)
+
+    # ── judge panel ────────────────────────────────────────────────────────
+    sym, sty = _icon(step_status.get("judges", "waiting"))
+    t = Text()
+    t.append(f"  {sym} ", style=sty)
+    t.append(f"{'judge panel':<18}", style="bold")
+    if step_status.get("judges") == "done":
+        t.append("done", style="green")
+        if judge_detail:
+            t.append("  ·  ", style="dim")
+            t.append(judge_detail, style="dim")
     lines.append(t)
 
     # ── synthesize ─────────────────────────────────────────────────────────
@@ -146,13 +172,17 @@ def stream_review(input_state: dict) -> dict:
     step_status: dict[str, str] = {
         "fetch":         "waiting",
         "classify":      "waiting",
+        "debate":        "waiting",
         "contradictions":"waiting",
         "blind_spots":   "waiting",
+        "judges":        "waiting",
         "synthesize":    "waiting",
     }
     classify_detail: str = ""
     reviewer_grid: dict[tuple[str, str], str | int | None] = {}
     figures_count: int | None = None
+    debate_detail: str = ""
+    judge_detail: str = ""
 
     with Live(
         _build_display(step_status, classify_detail, reviewer_grid, figures_count),
@@ -163,7 +193,8 @@ def stream_review(input_state: dict) -> dict:
 
         def _refresh() -> None:
             live.update(
-                _build_display(step_status, classify_detail, reviewer_grid, figures_count)
+                _build_display(step_status, classify_detail, reviewer_grid,
+                               figures_count, debate_detail, judge_detail)
             )
 
         for chunk in graph_runner.stream(
@@ -209,12 +240,31 @@ def stream_review(input_state: dict) -> dict:
                     step_status["figures"] = "done"
                     _refresh()
 
+                elif node == "debate":
+                    dd = update.get("deduped_findings") or []
+                    sustained  = sum(1 for f in dd if f.debate_outcome == "sustained")
+                    downgraded = sum(1 for f in dd if f.debate_outcome == "downgraded")
+                    debate_detail = (
+                        f"{len(dd)} findings após dedup  ·  "
+                        f"{sustained} sustained  ·  {downgraded} downgraded"
+                    )
+                    step_status["debate"] = "done"
+                    _refresh()
+
                 elif node == "contradiction_map":
                     step_status["contradictions"] = "done"
                     _refresh()
 
                 elif node == "blind_spot":
                     step_status["blind_spots"] = "done"
+                    _refresh()
+
+                elif node == "judge_panel":
+                    jp = update.get("judge_votes")
+                    if jp:
+                        judge_detail = "  ".join(f"{v.lens}: {v.vote}" for v in jp.votes)
+                        judge_detail += f"  →  {jp.verdict}"
+                    step_status["judges"] = "done"
                     _refresh()
 
                 elif node == "synthesize":

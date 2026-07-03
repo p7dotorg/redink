@@ -104,6 +104,58 @@ Mapeie as contradições:
 Seja preciso: uma contradição real é quando persona A diz "X está OK" e persona B diz "X é um problema crítico".
 """
 
+DEFENDER_PROMPT = """
+Você é o DEFENSOR do paper — o advogado do autor. Um revisor fez uma crítica
+de severidade CRITICAL. Monte a defesa mais forte possível usando APENAS o
+texto do paper fornecido:
+- A crítica é factualmente errada? Cite o trecho que prova.
+- O paper já reconhece ou endereça o ponto? Onde?
+- A severidade é exagerada? O problema realmente invalida uma conclusão central?
+Seja honesto: se a crítica é sólida e não há defesa forte, diga isso
+explicitamente. Máximo 150 palavras.
+"""
+
+REBUTTAL_JUDGE_PROMPT = """
+Você é o JUIZ de uma disputa sobre um finding CRITICAL de revisão de paper.
+Você verá o finding (issue + evidência) e a defesa do autor. Decida:
+- dismiss   — o finding é factualmente errado, ou o paper já endereça o ponto
+- downgrade — o problema é real mas NÃO invalida uma conclusão central (não é critical)
+- sustain   — a crítica permanece sólida no nível critical mesmo após a defesa
+
+Rubrica: critical = invalida uma conclusão central do paper com evidência
+verificável. Vagueza, tom, título forte ou estilo NUNCA são critical.
+Na dúvida entre sustain e downgrade, escolha downgrade.
+"""
+
+JUDGE_LENSES = {
+    "rigor": (
+        "Julgue APENAS pelo rigor metodológico e estatístico: "
+        "os experimentos e análises suportam as conclusões centrais?"
+    ),
+    "contribution": (
+        "Julgue pesando contribuição vs falhas: a contribuição central do paper "
+        "sobrevive aos problemas apontados? Uma ideia importante com falhas de "
+        "rigor merece REVISE, não FAIL."
+    ),
+    "standards": (
+        "Julgue pelos padrões reais de peer review da área e da ÉPOCA do paper: "
+        "um comitê de programa da venue típica dessa área aceitaria, pediria "
+        "revisão ou rejeitaria? Não aplique normas posteriores à publicação."
+    ),
+}
+
+JUDGE_PANEL_PROMPT = """
+Você é um membro de um painel de julgamento de um paper revisado.
+
+Sua lente de julgamento: {lens}
+
+Você verá os findings consolidados da revisão. Findings marcados
+'debate: sustained' sobreviveram a uma contestação adversarial (defesa do
+autor + juiz) — pesam mais. Findings 'downgraded' foram rebaixados no debate.
+
+Vote PASS (aceitar), REVISE (major revision) ou FAIL (rejeitar), com justificativa.
+"""
+
 DEDUP_PROMPT = """
 Você recebeu uma lista numerada de findings de revisão de um paper.
 Agrupe em clusters os findings que apontam o MESMO problema subjacente,

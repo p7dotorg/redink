@@ -9,8 +9,11 @@ load_dotenv()
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import Send
 
-from redink_core.schemas import Classification, Finding, Verdict, ContradictionMap, BlindSpot
-from redink_core.nodes import fetch_paper, classify, reviewer, figure_reviewer, contradiction_map, blind_spot, synthesize
+from redink_core.schemas import Classification, Finding, Verdict, ContradictionMap, BlindSpot, JudgePanel
+from redink_core.nodes import (
+    fetch_paper, classify, reviewer, figure_reviewer,
+    debate, contradiction_map, blind_spot, judge_panel, synthesize,
+)
 
 PERSONAS = ["skeptic", "practitioner", "academic"]
 
@@ -20,8 +23,10 @@ class ReviewState(TypedDict, total=False):
     github_url: str                                   # GitHub repo URL — fetch_paper will pull README
     classification: Optional[Classification]
     findings: Annotated[list[Finding], operator.add]
+    deduped_findings: list[Finding]                   # post-dedup, post-debate — what downstream nodes use
     contradiction_map: Optional[ContradictionMap]
     blind_spots: Optional[BlindSpot]
+    judge_votes: Optional[JudgePanel]
     verdict: Optional[Verdict]
 
 
@@ -63,17 +68,21 @@ builder.add_node("fetch_paper", fetch_paper)
 builder.add_node("classify", classify)
 builder.add_node("reviewer", reviewer)
 builder.add_node("figure_reviewer", figure_reviewer)
+builder.add_node("debate", debate)
 builder.add_node("contradiction_map", contradiction_map)
 builder.add_node("blind_spot", blind_spot)
+builder.add_node("judge_panel", judge_panel)
 builder.add_node("synthesize", synthesize)
 
 builder.add_edge(START, "fetch_paper")
 builder.add_edge("fetch_paper", "classify")
 builder.add_conditional_edges("classify", route_to_reviewers, ["reviewer", "figure_reviewer"])
-builder.add_edge("reviewer", "contradiction_map")
-builder.add_edge("figure_reviewer", "contradiction_map")
+builder.add_edge("reviewer", "debate")
+builder.add_edge("figure_reviewer", "debate")
+builder.add_edge("debate", "contradiction_map")
 builder.add_edge("contradiction_map", "blind_spot")
-builder.add_edge("blind_spot", "synthesize")
+builder.add_edge("blind_spot", "judge_panel")
+builder.add_edge("judge_panel", "synthesize")
 builder.add_edge("synthesize", END)
 
 graph = builder.compile(

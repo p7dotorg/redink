@@ -34,6 +34,13 @@ def format_report(verdict) -> str:
         f"minor: {verdict.minor_count}"
     )
 
+    panel = getattr(verdict, "judge_panel", None)
+    if panel:
+        lines.append("\nJUDGE PANEL:")
+        for v in panel.votes:
+            lines.append(f"  [{v.lens}] {v.vote} — {v.rationale}")
+        lines.append(f"  verdict: {panel.verdict}")
+
     if verdict.high_confidence_issues:
         lines.append("\nCONSENSUS (all personas agreed):")
         for issue in verdict.high_confidence_issues[:4]:
@@ -45,9 +52,12 @@ def format_report(verdict) -> str:
         if f.dimension != current_dim:
             current_dim = f.dimension
             lines.append(f"\n── {f.dimension.upper()} " + "─" * (40 - len(f.dimension)))
-        lines.append(f"\n  {f.severity.upper()} / {f.dimension} / {getattr(f, 'persona', '')}")
+        debate_tag = f" / debate: {f.debate_outcome}" if getattr(f, "debate_outcome", None) else ""
+        lines.append(f"\n  {f.severity.upper()} / {f.dimension} / {getattr(f, 'persona', '')}{debate_tag}")
         lines.append(f"  {f.issue}")
         lines.append(f"  Evidence: {f.evidence}")
+        if getattr(f, "defense", None):
+            lines.append(f"  Defense:  {f.defense}")
         lines.append(f"  Fix:      {f.suggestion}")
 
     c_map = getattr(verdict, "contradiction_map", None)
@@ -92,6 +102,14 @@ def print_report(verdict) -> None:
     counts.append(f"{verdict.minor_count} minor", style="blue")
     console.print(counts)
 
+    panel = getattr(verdict, "judge_panel", None)
+    if panel:
+        console.print()
+        console.print("  Judge panel", style="bold")
+        for v in panel.votes:
+            vc = _verdict_color(v.vote)
+            console.print(f"  [{vc}]{v.vote}[/{vc}]  [dim]{v.lens}[/dim]  {v.rationale}", soft_wrap=True)
+
     if verdict.high_confidence_issues:
         console.print()
         console.print("  Consensus", style="bold")
@@ -116,10 +134,16 @@ def print_report(verdict) -> None:
         header.append(f"  {persona}", style="dim")
         if conf != 5:
             header.append(f"  {conf}/10", style="dim")
+        outcome = getattr(f, "debate_outcome", None)
+        if outcome:
+            oc_style = {"sustained": "red", "downgraded": "yellow"}.get(outcome, "dim")
+            header.append(f"  ⚖ {outcome}", style=oc_style)
         console.print(header)
 
         console.print(f"  {f.issue}", soft_wrap=True)
         console.print(f"  Evidence  {f.evidence}", style="dim", soft_wrap=True)
+        if getattr(f, "defense", None):
+            console.print(f"  Defense   {f.defense}", style="dim italic", soft_wrap=True)
         console.print(f"  Fix       {f.suggestion}", style="dim", soft_wrap=True)
         console.print()
 
