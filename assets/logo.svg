@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 560" width="560" height="560">
+  <!-- pixel unit = 40px, transparent bg -->
+
+  <!-- Body (red) -->
+  <rect x="80"  y="80"  width="400" height="320" fill="#E8252A"/>
+
+  <!-- Left arm -->
+  <rect x="0"   y="280" width="80"  height="80"  fill="#E8252A"/>
+
+  <!-- Right arm -->
+  <rect x="480" y="280" width="80"  height="80"  fill="#E8252A"/>
+
+  <!-- Left eye (white slot) -->
+  <rect x="160" y="160" width="40"  height="80"  fill="#ffffff"/>
+
+  <!-- Right eye (white slot) -->
+  <rect x="320" y="160" width="40"  height="80"  fill="#ffffff"/>
+
+  <!-- 2 legs (centered) -->
+  <rect x="200" y="400" width="40"  height="80"  fill="#E8252A"/>
+  <rect x="320" y="400" width="40"  height="80"  fill="#E8252A"/>
+
+  <!-- pontinha preta 1px — logo abaixo do olho direito -->
+  <rect x="330" y="290" width="20"  height="20"  fill="#1A1A1A"/>
+</svg>
