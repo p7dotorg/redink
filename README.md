@@ -81,9 +81,22 @@ The measurement harness lives in [`eval/`](eval/) — the labeled-set collector,
 A second graph that scans dataset sources, scores opportunity, and writes an [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog) (OKF) bundle — a portable directory of markdown concepts you can `git clone` or open in Obsidian.
 
 ```
- [scan] × sources  →  [merge]  →  [prescore]  →  [score] × datasets  →  [catalog]  →  [digest]
-   HF · Kaggle          dedupe     quality gate    LLM opportunity 0–3    OKF concepts   run summary
-   · OpenML                        (source-aware)                        + index/log
+ [scan] × sources     fan-out: HuggingFace · Kaggle · OpenML
+    │
+    ▼
+ [merge]              dedupe across sources
+    │
+    ▼
+ [prescore]           rule-based quality gate (source-aware)
+    │
+    ▼
+ [score] × datasets   LLM opportunity score 0–3, one per dataset
+    │
+    ▼
+ [catalog]            write OKF concepts + rebuild index / log
+    │
+    ▼
+ [digest]             run summary concept
 ```
 
 Analysis reads the bundle's frontmatter at query time (no DB), exactly as the OKF spec intends:
