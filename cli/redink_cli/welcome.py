@@ -38,7 +38,7 @@ TIPS = (
     "  /scan [dim]<query>[/dim]   /rank   /gaps\n"
     "  /spikes   /wiki [dim]<slug>[/dim]\n"
     "\n"
-    "[dim]Ask anything after a review · /exit[/dim]"
+    "[dim]/config [papers|datasets] · ask anything · /exit[/dim]"
 )
 
 

@@ -12,6 +12,7 @@ COMMANDS = {
     "/gaps":   "least-covered task categories",
     "/spikes": "recently-active datasets",
     "/wiki":   "print an OKF concept — <slug>",
+    "/config": "view / edit config — [papers|datasets]",
     "/clear":  "clear the screen",
     "/help":   "show tips",
     "/exit":   "quit",
@@ -59,6 +60,13 @@ class RedinkCompleter(Completer):
             for dim in self._get_dimensions():
                 if dim.startswith(arg):
                     yield Completion(dim, start_position=-len(arg), display_meta="dimension")
+            return
+
+        # /config [papers|datasets]
+        if cmd == "/config":
+            for dom in ("papers", "datasets"):
+                if dom.startswith(arg):
+                    yield Completion(dom, start_position=-len(arg), display_meta="domain")
             return
 
         # /review <path|url> → path completion, plus an arXiv URL stub

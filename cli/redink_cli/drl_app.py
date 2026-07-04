@@ -128,8 +128,8 @@ def main() -> None:
         return _usage()
     cmd, rest = args[0], args[1:]
     if cmd == "setup":
-        from redink_cli.drl_setup import run_setup
-        return run_setup()
+        from redink_cli.config import wizard
+        return wizard(["shared", "datasets"], header="drl setup")
     dispatch = {"scan": _cmd_scan, "rank": _cmd_rank, "gaps": _cmd_gaps,
                 "spikes": _cmd_spikes, "wiki": _cmd_wiki}
     handler = dispatch.get(cmd)

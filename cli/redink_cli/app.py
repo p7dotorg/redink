@@ -143,6 +143,9 @@ def _chat_loop() -> None:
             elif cmd == "/clear":
                 console.clear()
                 show_welcome()
+            elif cmd == "/config":
+                from redink_cli.config import config_command
+                config_command(arg)
             elif cmd == "/report":
                 if last_state.get("verdict"):
                     from redink_cli.report import print_report
@@ -185,6 +188,11 @@ def main() -> None:
 
     if args and args[0] in ("-v", "--version"):
         print(f"redink {VERSION}")
+        sys.exit(0)
+
+    if args and args[0] == "setup":
+        from redink_cli.config import full_setup
+        full_setup()
         sys.exit(0)
 
     if args or not sys.stdin.isatty():
