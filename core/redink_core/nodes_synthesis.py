@@ -8,7 +8,7 @@ from langchain_core.runnables import RunnableConfig
 from redink_core.nodes_helpers import make_model, extract_arxiv_id
 from redink_core.prompts import (
     CONTRADICTION_MAP_PROMPT, BLIND_SPOT_PROMPT, DEDUP_PROMPT,
-    JUDGE_LENSES, JUDGE_PANEL_PROMPT, OUTPUT_LANGUAGE,
+    JUDGE_LENSES, JUDGE_PANEL_PROMPT, OUTPUT_LANGUAGE, CALIBRATION_ANCHORS,
 )
 from redink_core.schemas import (
     Finding, Verdict, ContradictionMap, BlindSpot, DedupMap, JudgeVote, JudgePanel,
@@ -166,7 +166,8 @@ def judge_panel(state, config: RunnableConfig = None):
         try:
             v = model.invoke([
                 SystemMessage(content=JUDGE_PANEL_PROMPT.format(
-                    lens=JUDGE_LENSES[lens_key], year_note=year_note)),
+                    lens=JUDGE_LENSES[lens_key], year_note=year_note,
+                    anchors=CALIBRATION_ANCHORS)),
                 HumanMessage(content=case),
             ])
         except Exception:

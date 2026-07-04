@@ -171,6 +171,16 @@ JUDGE_LENSES = {
     ),
 }
 
+# Frozen calibration anchors — real papers with their finding-profiles and the
+# verdict their reviewer rating implies. Derived from the ASAP-Review eval
+# (eval/rejudge.py), where adding them dropped over-FAIL from 82% to 16% and
+# made REVISE the dominant verdict, matching how peer review actually behaves.
+CALIBRATION_ANCHORS = """- Paper (reviewer avg 1.0, rejected): 0 sustained criticals, 0 critical / 5 major / 3 minor. Verdict: FAIL.
+- Paper (reviewer avg 5.0, rejected): 2 sustained criticals, 2 critical / 13 major / 6 minor. Verdict: REVISE.
+- Paper (reviewer avg 6.25, accepted): 2 sustained criticals, 2 critical / 19 major / 10 minor. Verdict: REVISE.
+- Paper (reviewer avg 8.33, accepted): 0 sustained criticals, 0 critical / 5 major / 3 minor. Verdict: PASS."""
+
+
 JUDGE_PANEL_PROMPT = """
 Você é um membro de um painel de julgamento de um paper revisado.
 
@@ -188,12 +198,20 @@ uma defesa do autor e decidido por um árbitro independente.
 - Criticals descartados no debate não aparecem.
 Portanto: "0 sustained" é um resultado FAVORÁVEL ao paper, não contra ele.
 
-REGRA DE DECISÃO:
-- FAIL exige pelo menos 1 critical SUSTENTADO — ou uma justificativa explícita
-  de por que o conjunto de majors, somado, invalida uma conclusão central.
-- Com 0 criticals sustentados, o veredito esperado é PASS ou REVISE:
-  vários majors legítimos → REVISE; poucos problemas endereçáveis → PASS.
-- Volume NÃO é gravidade: uma lista de majors não equivale a um critical.
+PAPERS DE REFERÊNCIA — perfis reais e o veredito que a nota humana implica.
+Posicione o paper sob revisão NESTA MESMA ESCALA, não contra um ideal de perfeição:
+{anchors}
+
+O QUE OS VEREDITOS SIGNIFICAM NA PRÁTICA:
+- FAIL é RARO. Significa que uma conclusão central NÃO se sustenta (um critical
+  que sobreviveu ao debate). Uma lista longa de majors NÃO é FAIL — papers reais
+  aceitos carregam muitos majors (veja os papers de referência aceitos).
+- REVISE é o veredito COMUM: falhas reais, corrigíveis, que não invalidam a
+  contribuição. A maioria dos papers cai aqui.
+- PASS: sólido, poucos problemas endereçáveis.
+
+REGRA DE DECISÃO: FAIL exige pelo menos 1 critical SUSTENTADO. Com 0 sustentados,
+o esperado é PASS ou REVISE. Volume NÃO é gravidade.
 
 Vote PASS (aceitar), REVISE (major revision) ou FAIL (rejeitar), com justificativa.
 """ + OUTPUT_LANGUAGE

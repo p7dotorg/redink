@@ -119,7 +119,10 @@ def _run_redink(rec: dict) -> dict:
 
 def _build_anchors(records: list[dict], scored_ids: set[str], k: int) -> str:
     """Pick k held-out papers spanning the rating range, run redink for their
-    profiles, format as few-shot anchors."""
+    profiles, format as few-shot anchors. k=0 → use the frozen production set."""
+    if k == 0:
+        from redink_core.prompts import CALIBRATION_ANCHORS
+        return CALIBRATION_ANCHORS
     held = [r for r in records if r["id"] not in scored_ids and r.get("avg_rating")]
     held.sort(key=lambda r: r["avg_rating"])
     if len(held) < k:
