@@ -40,9 +40,16 @@ def merge(state, config: RunnableConfig = None):
 
 
 def _quality(d: dict) -> int:
-    """Rule-based pre-score 0/1/2 — cheap gate before the LLM."""
+    """Rule-based pre-score 0/1/2 — cheap gate before the LLM. Source-aware:
+    OpenML's list endpoint carries no download/like counts, but every entry is
+    a curated ML dataset, so it floors at 1 (bumped by instance count)."""
     if d["gated"] or d["private"] or d["disabled"]:
         return 0
+    if d["source"] == "openml":
+        try:
+            return 2 if float(d.get("_instances") or 0) >= 10000 else 1
+        except (ValueError, TypeError):
+            return 1
     has_task = any(t.startswith(_TASK_PREFIXES) for t in d["tags"])
     if d["downloads"] >= 1000 or d["likes"] >= 5:
         return 2 if has_task else 1
