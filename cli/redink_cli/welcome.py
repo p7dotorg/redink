@@ -30,14 +30,15 @@ _MASCOT = (
 )
 
 TIPS = (
-    "[bold red]Getting started[/bold red]\n"
-    "  /review [dim]<paper.md>[/dim]\n"
-    "  /review [dim]<github-url>[/dim]\n"
+    "[bold red]Review papers[/bold red]\n"
+    "  /review [dim]<paper.md | arxiv-url>[/dim]\n"
+    "  /report   /rerun [dim]<dim>[/dim]\n"
     "\n"
-    "[bold red]In a review[/bold red]\n"
-    "  /report  /rerun [dim]<dim>[/dim]  /exit\n"
+    "[bold red]Research datasets[/bold red]\n"
+    "  /scan [dim]<query>[/dim]   /rank   /gaps\n"
+    "  /spikes   /wiki [dim]<slug>[/dim]\n"
     "\n"
-    "[dim]Ask anything after a review.[/dim]"
+    "[dim]Ask anything after a review · /exit[/dim]"
 )
 
 

@@ -24,6 +24,16 @@ from redink_cli.run import stream_review, render_report
 from redink_cli.report import format_report
 from redink_cli.commands import cmd_review, cmd_rerun
 from redink_cli.completer import RedinkCompleter
+from redink_cli import drl_app
+
+# dataset research loop — same slash-command surface, one chat
+_DRL_COMMANDS = {
+    "/scan":   drl_app._cmd_scan,
+    "/rank":   drl_app._cmd_rank,
+    "/gaps":   drl_app._cmd_gaps,
+    "/spikes": drl_app._cmd_spikes,
+    "/wiki":   drl_app._cmd_wiki,
+}
 
 console = Console()
 _PROMPT_STYLE = Style.from_dict({
@@ -146,6 +156,8 @@ def _chat_loop() -> None:
                     chat_history = []
             elif cmd == "/rerun":
                 cmd_rerun(arg, last_state)
+            elif cmd in _DRL_COMMANDS:
+                _DRL_COMMANDS[cmd](arg.split())
             else:
                 console.print(f"  [dim]unknown: {cmd}  —  /help[/dim]")
 
