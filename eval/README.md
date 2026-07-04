@@ -34,10 +34,24 @@ kept only as coarse signals (e.g. does redink's verdict correlate with rating).
    First run downloads the ~235MB dataset zip to `eval/data/` (via gdown).
    Rejects only exist for ICLR (NIPS publishes reviews for accepts only).
 
-2. **metric** (next, not built yet) — run redink over each `full_text`, then an
-   LLM judges what fraction of the human reviewers' weaknesses redink's findings
-   cover (recall), what fraction of redink's findings map to a human concern
-   (precision), and whether redink's verdict tracks `avg_rating`.
+2. **overlap_metric.py** — run redink over each `full_text`, then an LLM judge
+   compares its findings to the human reviewers' weaknesses.
+
+   ```bash
+   uv run python eval/overlap_metric.py --in eval/data/asap_300.jsonl --n 50
+   ```
+   Reports:
+   - `recall` — fraction of human-raised weaknesses redink also caught
+   - `noise_rate` — fraction of redink findings judged wrong / pedantic
+   - `novel_rate` — fraction that are legit concerns humans did not raise
+   - `verdict × rating` — does PASS/REVISE/FAIL trend with the human avg rating?
+
+   Every stage is cached per paper under `eval/data/cache/`, so re-running after
+   a matcher tweak does not re-run the expensive redink pipeline. Each paper
+   costs ~50-70 pipeline calls + 2 judge calls — start with `--n 10`.
+
+   A non-matching redink finding is NOT auto-noise (humans miss things), so the
+   judge splits unmatched findings into `plausible_unraised` vs `noise`.
 
 ## Notes
 
