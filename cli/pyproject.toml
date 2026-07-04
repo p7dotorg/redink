@@ -17,6 +17,7 @@ dependencies = [
 
 [project.scripts]
 redink = "redink_cli.app:main"
+drl = "redink_cli.drl_app:main"
 
 [tool.uv.sources]
 redink-core = { workspace = true }
