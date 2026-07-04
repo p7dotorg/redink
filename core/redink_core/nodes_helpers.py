@@ -30,7 +30,7 @@ def make_model(
     model_env_key: str,
     default: str,
     structured_schema=None,
-    max_tokens: int = None,
+    max_tokens: int = 2000,
     config: RunnableConfig | None = None,
 ):
     kwargs = dict(
@@ -40,9 +40,11 @@ def make_model(
         default_headers={"HTTP-Referer": "http://localhost:2024", "X-Title": "redink"},
         temperature=0,
         max_retries=4,  # OpenRouter providers throw transient 429s — back off instead of crashing the run
+        # ALWAYS cap: an uncapped call lets the model default to its full context
+        # (65536 for deepseek), and OpenRouter reserves credit for that ceiling
+        # even when actual usage is a few hundred tokens.
+        max_tokens=max_tokens,
     )
-    if max_tokens:
-        kwargs["max_tokens"] = max_tokens
     m = ChatOpenAI(**kwargs)
     return m.with_structured_output(structured_schema) if structured_schema else m
 

@@ -180,7 +180,7 @@ def main():
     ap.add_argument("--out", type=Path, default=Path("eval/data/metric_results.jsonl"))
     args = ap.parse_args()
 
-    model = make_model("METRIC_MODEL", "openai/gpt-4o", max_tokens=2000)
+    model = make_model("METRIC_MODEL", "openai/gpt-4o-mini", max_tokens=2000)
     # split on "\n" only — str.splitlines() also breaks on U+2028/U+2029 which
     # json.dumps(ensure_ascii=False) leaves raw inside paper text, corrupting records
     records = [json.loads(l) for l in args.inp.read_text().split("\n") if l.strip()][:args.n]

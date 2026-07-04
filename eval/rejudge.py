@@ -195,7 +195,7 @@ def main():
     scored = [r for r in scored if (CACHE / "redink" / f"{r['id']}.json").exists()]
     print(f"scored papers cached: {len(scored)}/{args.n}", file=sys.stderr)
 
-    model = make_model("METRIC_MODEL", "openai/gpt-4o", max_tokens=800)
+    model = make_model("METRIC_MODEL", "openai/gpt-4o-mini", max_tokens=800)
     print(f"building {args.anchors} calibration anchors (held-out)...", file=sys.stderr)
     anchors = _build_anchors(records, scored_ids, args.anchors)
     print("ANCHORS:\n" + anchors + "\n", file=sys.stderr)
