@@ -21,3 +21,6 @@ dist/
 /cli.py
 /exemplo.md
 automem.md
+
+# eval datasets (large / generated — not source)
+eval/data/
