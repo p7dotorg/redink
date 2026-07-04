@@ -8,7 +8,7 @@ from langchain_core.runnables import RunnableConfig
 from redink_core.nodes_helpers import make_model, extract_arxiv_id
 from redink_core.prompts import (
     CONTRADICTION_MAP_PROMPT, BLIND_SPOT_PROMPT, DEDUP_PROMPT,
-    JUDGE_LENSES, JUDGE_PANEL_PROMPT,
+    JUDGE_LENSES, JUDGE_PANEL_PROMPT, OUTPUT_LANGUAGE,
 )
 from redink_core.schemas import (
     Finding, Verdict, ContradictionMap, BlindSpot, DedupMap, JudgeVote, JudgePanel,
@@ -248,6 +248,7 @@ def synthesize(state, config: RunnableConfig = None):
             "Você é um meta-revisor STORM. Escreva um parágrafo de veredito integrando "
             "findings, o resultado do debate adversarial, os votos do painel de juízes, "
             "consensos e blind spots. O status já foi decidido pelo painel — justifique-o."
+            + OUTPUT_LANGUAGE
         )),
         HumanMessage(content=(
             f"Paper: {clf.area} — {clf.paper_type}\nStatus: {status}\n"

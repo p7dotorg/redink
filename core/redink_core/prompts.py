@@ -1,5 +1,13 @@
 """Prompts por dimensão e por persona — STORM-style multi-perspective review."""
 
+# Output is standardized to English regardless of the (Portuguese) instructions
+# or the paper's language — the models otherwise code-switch unpredictably.
+OUTPUT_LANGUAGE = (
+    "\n\nIMPORTANT: write ALL user-facing output — issue, evidence, suggestion, "
+    "summaries, rationales, defenses — in ENGLISH, regardless of the language of "
+    "these instructions or the paper. Never mix languages."
+)
+
 # Persona base prompts — sobrepostos sobre os prompts de dimensão
 PERSONA_PROMPTS = {
     "skeptic": (
@@ -91,7 +99,7 @@ Máximo 4 findings. Cada campo com no máximo 2 frases.
 O campo evidence deve ser um trecho LITERAL do texto fornecido.
 Se o texto do paper estiver marcado como EXCERTO, não reporte ausência de
 seções, hiperparâmetros ou experimentos que podem estar na parte omitida.
-"""
+""" + OUTPUT_LANGUAGE
 
 CONTRADICTION_MAP_PROMPT = """
 Você recebeu análises de 3 personas diferentes (skeptic, practitioner, academic) sobre as mesmas dimensões de um paper.
@@ -105,7 +113,7 @@ Seja preciso: uma contradição real é quando persona A diz "X está OK" e pers
 Se não houver contradições REAIS entre posições que as personas de fato
 escreveram, retorne contradictions: [] — lista vazia é o resultado correto.
 NUNCA invente, inverta ou parafraseie posições que nenhuma persona escreveu.
-"""
+""" + OUTPUT_LANGUAGE
 
 DEFENDER_PROMPT = """
 Você é o DEFENSOR do paper — o advogado do autor. Um revisor fez uma crítica
@@ -116,7 +124,7 @@ texto do paper fornecido:
 - A severidade é exagerada? O problema realmente invalida uma conclusão central?
 Seja honesto: se a crítica é sólida e não há defesa forte, diga isso
 explicitamente. Máximo 150 palavras.
-"""
+""" + OUTPUT_LANGUAGE
 
 REBUTTAL_JUDGE_PROMPT = """
 Você é o JUIZ de uma disputa sobre um finding CRITICAL de revisão de paper.
@@ -188,7 +196,7 @@ REGRA DE DECISÃO:
 - Volume NÃO é gravidade: uma lista de majors não equivale a um critical.
 
 Vote PASS (aceitar), REVISE (major revision) ou FAIL (rejeitar), com justificativa.
-"""
+""" + OUTPUT_LANGUAGE
 
 DEDUP_PROMPT = """
 Você recebeu uma lista numerada de findings de revisão de um paper.
@@ -219,4 +227,4 @@ Exemplos de blind spots comuns:
 - Generalização geográfica/cultural (ignorado em papers com dados específicos)
 - Comparação com baselines óbvios (ignorado quando autores constroem seu próprio benchmark)
 - Limitações do próprio framework de avaliação
-"""
+""" + OUTPUT_LANGUAGE

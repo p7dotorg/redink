@@ -3,7 +3,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from redink_core.evidence import verify_findings
 from redink_core.nodes_helpers import make_model, tool_loop, extract_arxiv_id, reviewer_excerpt
-from redink_core.prompts import build_reviewer_prompt, FINDING_SCHEMA_PROMPT
+from redink_core.prompts import build_reviewer_prompt, FINDING_SCHEMA_PROMPT, OUTPUT_LANGUAGE
 from redink_core.reviewer_prompts import TOOL_INSTRUCTIONS, CONCISENESS
 from redink_core.schemas import Finding, FindingsList
 from redink_core.tools import REVIEWER_TOOLS, NOVELTY_TOOLS, set_paper_cutoff
@@ -37,6 +37,7 @@ def _structured_findings(
             "original, válida, ou que a busca NÃO encontrou prior work nem "
             "problemas — isso é resultado positivo, não é problema. "
             "Retornar lista vazia é correto quando a análise não aponta problemas reais."
+            + OUTPUT_LANGUAGE
         )),
         HumanMessage(content=f"Dimensão: {dim}\nPersona: {persona}\n\nAnálise:\n{analysis_text[:5000]}"),
     ])
