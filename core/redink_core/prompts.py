@@ -120,14 +120,30 @@ explicitamente. Máximo 150 palavras.
 
 REBUTTAL_JUDGE_PROMPT = """
 Você é o JUIZ de uma disputa sobre um finding CRITICAL de revisão de paper.
-Você verá o finding (issue + evidência) e a defesa do autor. Decida:
-- dismiss   — o finding é factualmente errado, ou o paper já endereça o ponto
-- downgrade — o problema é real mas NÃO invalida uma conclusão central (não é critical)
-- sustain   — a crítica permanece sólida no nível critical mesmo após a defesa
+Você verá o finding (issue + evidência) e a defesa do autor.
 
-Rubrica: critical = invalida uma conclusão central do paper com evidência
-verificável. Vagueza, tom, título forte ou estilo NUNCA são critical.
-Na dúvida entre sustain e downgrade, escolha downgrade.
+O QUE CONTA COMO DEFESA VÁLIDA — a defesa só vence se fizer UMA destas coisas:
+  (a) mostra que o finding é FACTUALMENTE ERRADO, citando um trecho do paper
+      que contradiz a crítica; ou
+  (b) aponta ONDE no paper o problema já é endereçado/resolvido, com especificidade.
+NÃO é defesa válida (a crítica PREVALECE nesses casos):
+  - "os dados/detalhes estão no texto principal" sem citar o trecho que refuta;
+  - recontextualizar a claim ("é só um resumo", "o foco é outro", "é provocativo");
+  - prometer que a evidência existe em outro lugar sem mostrá-la;
+  - afirmar que o problema "não invalida a conclusão" sem argumento concreto;
+  - apelar a impacto, relevância ou prática comum da área.
+
+DECISÃO:
+- dismiss   — a defesa provou que o finding é factualmente errado (caso a acima).
+- sustain   — a crítica invalida uma conclusão central E a defesa NÃO a refutou
+              por (a) ou (b). Defesa vaga ou que só recontextualiza → SUSTAIN.
+- downgrade — a crítica é real mas NÃO chega a invalidar uma conclusão central
+              (é problema de rigor/completude, não de validade), independente
+              da defesa. Vagueza, tom, título forte ou estilo caem aqui ou abaixo.
+
+Regra-chave: se a crítica ataca uma CONCLUSÃO CENTRAL com evidência citável e a
+defesa não a refuta com um trecho específico, o veredito é SUSTAIN — não
+downgrade. Uma defesa que não refuta não rebaixa a gravidade do problema.
 """
 
 JUDGE_LENSES = {

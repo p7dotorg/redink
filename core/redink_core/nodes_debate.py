@@ -30,7 +30,8 @@ def _debate_one(finding: Finding, paper_excerpt: str, config) -> Rebuttal | None
             )),
         ]).content
 
-        judge = make_model("STRUCTURED_MODEL", "openai/gpt-4o-mini",
+        # nuanced call (refutes vs merely recontextualizes) — worth the stronger model
+        judge = make_model("JUDGE_MODEL", "openai/gpt-4o",
                            Rebuttal, max_tokens=1000, config=config)
         ruling = judge.invoke([
             SystemMessage(content=REBUTTAL_JUDGE_PROMPT),
