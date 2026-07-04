@@ -12,8 +12,6 @@ Adversarial pre-submission paper red-teamer **and** dataset opportunity scout â€
   <img src="assets/demo.gif" width="820" alt="redink demo â€” a calibrated paper review"/>
 </p>
 
-<sub>Reproduce it: <code>vhs assets/demo.tape</code> (renders <code>assets/demo.gif</code>).</sub>
-
 ## Two flows, one REPL
 
 ```bash
