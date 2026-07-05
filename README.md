@@ -188,4 +188,4 @@ See [SECURITY.md](SECURITY.md) to report a vulnerability.
 
 ---
 
-Part of [p7dotorg](https://github.com/p7dotorg). · [redink.sh](https://redink.sh)
+Part of [p7dotorg](https://github.com/p7dotorg). · [paper7.org](https://paper7.org)
