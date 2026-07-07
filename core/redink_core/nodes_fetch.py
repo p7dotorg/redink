@@ -132,7 +132,10 @@ def _fetch_arxiv(url: str) -> str | None:
 def fetch_paper(state, config: RunnableConfig = None):
     """Pass-through if paper is already set; else fetch from github_url (GitHub or arXiv)."""
     if state.get("paper"):
-        return {}
+        # Re-emit so downstream consumers that read node updates (the CLI's
+        # stream accumulator, the HTML annotator) see the paper for local
+        # inputs — not just for fetched arXiv/GitHub ones.
+        return {"paper": state["paper"]}
     url = state.get("github_url")
     if not url:
         return {}
