@@ -225,35 +225,35 @@ def synthesize(state, config: RunnableConfig = None):
     )
     extra = ""
     if c_map and c_map.contradictions:
-        extra += "\n\nCONTRADIÇÕES:\n" + "\n".join(
-            f"- {c.persona_a} vs {c.persona_b} em '{c.dimension}': {c.claim_a} ≠ {c.claim_b}"
+        extra += "\n\nCONTRADICTIONS:\n" + "\n".join(
+            f"- {c.persona_a} vs {c.persona_b} on '{c.dimension}': {c.claim_a} ≠ {c.claim_b}"
             for c in c_map.contradictions[:3]
         )
         if c_map.consensus:
-            extra += "\nCONSENSO: " + "; ".join(c_map.consensus[:3])
+            extra += "\nCONSENSUS: " + "; ".join(c_map.consensus[:3])
     if b_spots and b_spots.topics_not_covered:
         extra += "\n\nBLIND SPOTS: " + "; ".join(b_spots.topics_not_covered[:3])
     if panel:
-        extra += "\n\nPAINEL DE JUÍZES:\n" + "\n".join(
+        extra += "\n\nJUDGE PANEL:\n" + "\n".join(
             f"- [{v.lens}] {v.vote}: {v.rationale}" for v in panel.votes
         )
     debated = [f for f in findings if f.debate_outcome]
     if debated:
-        extra += "\n\nDEBATE (criticals contestados pela defesa do autor):\n" + "\n".join(
+        extra += "\n\nDEBATE (criticals contested by the author's defense):\n" + "\n".join(
             f"- [{f.debate_outcome}] {f.issue[:120]}" for f in debated
         )
 
     model = make_model("SYNTHESIZE_MODEL", "deepseek/deepseek-v4-flash", config=config)
     summary = model.invoke([
         SystemMessage(content=(
-            "Você é um meta-revisor STORM. Escreva um parágrafo de veredito integrando "
-            "findings, o resultado do debate adversarial, os votos do painel de juízes, "
-            "consensos e blind spots. O status já foi decidido pelo painel — justifique-o."
-            + OUTPUT_LANGUAGE
+            "You are a STORM meta-reviewer. Write ONE verdict paragraph that "
+            "integrates the findings, the adversarial-debate outcome, the judge "
+            "panel's votes, consensus points and blind spots. The status was "
+            "already decided by the panel — justify it. Write in English."
         )),
         HumanMessage(content=(
             f"Paper: {clf.area} — {clf.paper_type}\nStatus: {status}\n"
-            f"Críticos: {len(critical)} | Maiores: {len(major)} | Menores: {len(minor)}\n\n"
+            f"Critical: {len(critical)} | Major: {len(major)} | Minor: {len(minor)}\n\n"
             f"{findings_text}{extra}"
         )),
     ])
