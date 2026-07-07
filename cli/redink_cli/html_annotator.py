@@ -181,24 +181,29 @@ def _annotate(paper_text: str, findings: list) -> tuple[str, list]:
     on mobile it collapses inline below the highlight.
     """
     hits: list[tuple[int, int, int, object]] = []
-    lower = paper_text.lower()
+    matched: set = set()
 
     for i, f in enumerate(findings):
         ev = (getattr(f, "evidence", "") or "").strip()
-        for length in (80, 55, 35, 15):
-            snippet = ev[:length].strip()
-            if len(snippet) < 8:
+        words = re.findall(r"\w+", ev)
+        # word-sequence regex tolerant of whitespace/newline differences — a
+        # clean LLM evidence quote must match line-broken / spaced PDF text.
+        for n in (14, 9, 5):
+            if len(words) < 3:
+                break
+            pat = re.compile(r"\s+".join(re.escape(w) for w in words[:n]), re.IGNORECASE)
+            m = pat.search(paper_text)
+            if not m:
                 continue
-            idx = lower.find(snippet.lower())
-            if idx == -1:
-                continue
-            end = idx + len(snippet)
+            idx, end = m.span()
             if any(s < end and e > idx for (s, e, _, _) in hits):
-                continue
+                break
             hits.append((idx, end, i, f))
+            matched.add(i)
             break
 
     hits.sort()
+    unanchored = [f for i, f in enumerate(findings) if i not in matched]
 
     parts, pos = [], 0
     meta = []
@@ -245,6 +250,31 @@ def _annotate(paper_text: str, findings: list) -> tuple[str, list]:
 
     if pos < len(paper_text):
         parts.append(_txt(paper_text[pos:]))
+
+    # Findings whose evidence couldn't be located in the (often PDF-extracted)
+    # text still get shown — as a list at the end, so the report is never empty.
+    if unanchored:
+        base = len(findings)
+        parts.append('<div class="unanchored"><h3>Findings not located in the text</h3>')
+        for j, f in enumerate(unanchored):
+            sev = getattr(f, "severity", "minor")
+            col, bg, _ = _SEVERITY_COLOR.get(sev, _SEVERITY_COLOR["minor"])
+            icon = _SEVERITY_ICON.get(sev, "·")
+            dim = _html.escape(getattr(f, "dimension", ""))
+            per = _html.escape(getattr(f, "persona", ""))
+            issue = _html.escape((getattr(f, "issue", "") or ""))
+            fix = _html.escape((getattr(f, "suggestion", "") or ""))
+            ev = _html.escape((getattr(f, "evidence", "") or "")[:400])
+            parts.append(
+                f'<div class="ua-card" style="border-left:3px solid {col}">'
+                f'<div class="note-header"><span class="note-badge" style="color:{col}">'
+                f'{icon} {sev.upper()}</span><span class="note-tags">{dim} · {per}</span></div>'
+                f'<div class="note-issue">{issue}</div>'
+                f'<div class="ua-ev">“{ev}”</div>'
+                f'<div class="note-fix">↳ {fix}</div></div>'
+            )
+            meta.append({"id": base + j, "severity": sev})
+        parts.append('</div>')
 
     return "".join(parts), meta
 
@@ -524,6 +554,21 @@ aside.note.active{{
   font-family:'Lora',serif;
   font-size:10.5px;font-style:italic;
   color:var(--body-col);line-height:1.5;
+}}
+/* ── unanchored findings (evidence not located in text) ── */
+.unanchored{{
+  margin-top:48px;padding-top:24px;border-top:2px solid var(--rule);
+}}
+.unanchored h3{{
+  font-family:'Inter',sans-serif;font-size:13px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);margin-bottom:16px;
+}}
+.ua-card{{
+  background:var(--note-bg,#faf8f5);padding:12px 16px;margin-bottom:12px;border-radius:3px;
+}}
+.ua-ev{{
+  font-family:'Lora',serif;font-size:11px;font-style:italic;
+  color:var(--ink-soft);margin:6px 0;line-height:1.5;
 }}
 
 /* ── mobile ── */
