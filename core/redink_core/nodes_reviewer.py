@@ -62,15 +62,20 @@ def reviewer(state, config: RunnableConfig = None):
 
     # Early exit for citations with no references
     if dim == "citations":
+        from redink_core.nodes_classify import _REFS_RE
         real_citations = [c for c in clf.citations if not c.startswith("@")]
         if not real_citations:
+            # A References section exists but wasn't parsed into citations —
+            # a PDF-extraction artifact, not a flaw in the paper. Don't accuse it.
+            if _REFS_RE.search(state["paper"]):
+                return {"findings": []}
             if persona != "skeptic":
                 return {"findings": []}
             return {"findings": [Finding(
                 dimension="citations", persona="skeptic", severity="minor",
-                issue="Paper não possui referências bibliográficas verificáveis.",
-                evidence="Nenhuma citação acadêmica encontrada.",
-                suggestion="Adicione uma seção References.",
+                issue="No verifiable bibliographic references were extracted from the paper.",
+                evidence="No academic citations found in the extracted text.",
+                suggestion="Ensure the References section is present and machine-readable.",
                 confidence=10,
             )]}
 
@@ -129,9 +134,9 @@ def figure_reviewer(state, config: RunnableConfig = None):
     if not figures:
         return {"findings": [Finding(
             dimension="figures", persona="skeptic", severity="minor",
-            issue="Figuras não disponíveis (paper não está no ar5iv ou sem arXiv ID).",
-            evidence="ar5iv retornou lista vazia.",
-            suggestion="Verifique manualmente os gráficos do PDF original.",
+            issue="Figures unavailable (paper not on ar5iv or no arXiv ID) — not reviewed.",
+            evidence="ar5iv returned no figures.",
+            suggestion="Review the figures manually in the original PDF.",
         )]}
 
     system_prompt = build_reviewer_prompt("figures", "skeptic")

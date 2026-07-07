@@ -32,11 +32,26 @@ Regras OBRIGATÓRIAS para o campo claims — extraia 5-8 contribuições TÉCNIC
 """
 
 
+# Matches "REFERENCES" / "BIBLIOGRAPHY" even when a PDF extractor letter-spaces
+# the drop-cap header ("R EFERENCES", "R E F E R E N C E S").
+_REFS_RE = re.compile(
+    r"R\s*E\s*F\s*E\s*R\s*E\s*N\s*C\s*E\s*S|B\s*I\s*B\s*L\s*I\s*O\s*G\s*R\s*A\s*P\s*H\s*Y",
+    re.IGNORECASE,
+)
+
+
 def _classify_excerpt(paper: str) -> str:
-    """Send first 12k + last 3k chars — covers abstract + intro + start of methods + references."""
+    """First 12k + the References section (if stranded in the omitted middle,
+    e.g. before an appendix) + last 3k. Without the refs chunk, papers with a
+    post-references appendix look citation-less to classify."""
     if len(paper) <= 15000:
         return paper
-    return paper[:12000] + "\n\n[... seções intermediárias omitidas ...]\n\n" + paper[-3000:]
+    parts = [paper[:12000]]
+    m = _REFS_RE.search(paper, 12000, len(paper) - 3000)
+    if m:
+        parts.append("\n\n[... body omitted ...]\n\n" + paper[m.start():m.start() + 4000])
+    parts.append("\n\n[... omitted ...]\n\n" + paper[-3000:])
+    return "".join(parts)
 
 
 _ML_AREAS = ("machine learning", "deep learning", "computer vision", "nlp",

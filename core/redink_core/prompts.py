@@ -152,7 +152,7 @@ DECISÃO:
 Regra-chave: se a crítica ataca uma CONCLUSÃO CENTRAL com evidência citável e a
 defesa não a refuta com um trecho específico, o veredito é SUSTAIN — não
 downgrade. Uma defesa que não refuta não rebaixa a gravidade do problema.
-"""
+""" + OUTPUT_LANGUAGE
 
 JUDGE_LENSES = {
     "rigor": (
