@@ -42,3 +42,8 @@ pod = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["redink_core"]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: testes lentos que rodam containers Docker reais (gated em docker_available)",
+]

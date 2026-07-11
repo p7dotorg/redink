@@ -6,7 +6,9 @@ import subprocess
 from dataclasses import dataclass
 from typing import Optional
 
-_IMAGE = "python:3.11-slim"
+# Imagem full (não -slim): traz git (pro clone) e build tools (gcc etc.) que
+# pacotes com extensões C precisam pra instalar. slim não tem git.
+_IMAGE = "python:3.11"
 _LOG_TAIL = 2000
 
 # Fase 1 (rede ligada): clona, instala, e grava os pacotes top-level do repo.
@@ -14,25 +16,36 @@ _LOG_TAIL = 2000
 _PHASE1 = r"""
 set -o pipefail
 cd /work
-rm -rf repo
+rm -rf repo site
 git clone --depth 1 "$REPO_URL" repo 2>&1 || exit 10
 cd repo
+# Instala no VOLUME (/work/site), não no site-packages do container — a fase 2
+# roda num container novo e só enxerga o volume compartilhado.
 if [ -f pyproject.toml ] || [ -f setup.py ]; then
-  pip install --quiet . 2>&1 || exit 20
+  pip install --quiet --target /work/site . 2>&1 || exit 20
 elif [ -f requirements.txt ]; then
-  pip install --quiet -r requirements.txt 2>&1 || exit 20
+  pip install --quiet --target /work/site -r requirements.txt 2>&1 || exit 20
 else
   exit 30
 fi
 python - <<'PY'
 import pathlib
 root = pathlib.Path('/work/repo')
+# Dirs que têm __init__.py mas não são o pacote do paper.
+DENY = {'tests', 'test', 'testing', 'docs', 'doc', 'examples', 'example',
+        'benchmarks', 'benchmark', 'scripts', 'script', 'tools', 'notebooks',
+        'samples', 'sample'}
 cands = []
-for base in (root, root / 'src'):
+# src-layout primeiro (localização autoritativa do pacote), depois a raiz.
+for base in (root / 'src', root):
     if base.is_dir():
         for d in sorted(base.iterdir()):
+            if d.name.lower() in DENY:
+                continue
             if (d / '__init__.py').exists():
                 cands.append(d.name)
+seen = set()
+cands = [c for c in cands if not (c in seen or seen.add(c))]
 pathlib.Path('/work/candidates.txt').write_text("\n".join(cands))
 PY
 """
@@ -41,6 +54,9 @@ PY
 # importa o que o pip instalou no site-packages, não a árvore de fonte.
 _PHASE2 = r"""
 cd /work
+# /work/site = deps+pacote instalados no volume; /work/repo = fonte (caso
+# requirements.txt, onde o pacote é a própria árvore do repo).
+export PYTHONPATH=/work/site:/work/repo
 python - <<'PY'
 import pathlib, sys
 p = pathlib.Path('/work/candidates.txt')
