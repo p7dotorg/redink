@@ -2,9 +2,12 @@
 Docker efêmero e testa se instala e importa. Zero deps novas: chama o CLI do
 Docker por subprocess. Todo código do repo roda dentro do container, com rede
 cortada na fase de import."""
+import re
 import subprocess
 from dataclasses import dataclass
 from typing import Optional
+
+import httpx
 
 # Imagem full (não -slim): traz git (pro clone) e build tools (gcc etc.) que
 # pacotes com extensões C precisam pra instalar. slim não tem git.
@@ -75,6 +78,80 @@ print("IMPORT_FAIL:" + repr(err))
 sys.exit(1)
 PY
 """
+
+
+_REPO_PATH_RE = re.compile(r"https://github\.com/([\w.-]+)/(.+)")
+
+
+def _repo_variants(url: str, paper: str = "") -> list[str]:
+    """Candidatos ordenados pra uma URL de repo possivelmente mangada.
+
+    URLs de paper vêm quebradas do PDF: esquema http, truncadas na quebra de
+    linha (`.../Adversarial_`), ou com hífen virado espaço (`feature
+    intertwiner`). Gera variantes plausíveis pra validação por rede escolher a
+    que existe."""
+    out: list[str] = []
+
+    def add(u: str) -> None:
+        u = u.rstrip("/")
+        if u and u not in out:
+            out.append(u)
+
+    url = url.strip().rstrip(".,);:")
+    if url.startswith("http://"):
+        url = "https://" + url[len("http://"):]
+    add(url)
+
+    m = _REPO_PATH_RE.match(url)
+    if not m:
+        return out
+    owner, repo = m.group(1), m.group(2)
+
+    # hífen/underscore virou espaço na extração
+    if " " in repo:
+        add(f"https://github.com/{owner}/{repo.replace(' ', '-')}")
+        add(f"https://github.com/{owner}/{repo.replace(' ', '_')}")
+
+    # nome truncado na quebra do PDF — reconstrói do texto do paper. O corte
+    # vira \n OU espaço (`Adversarial_ Video_Generation`), então permitimos UMA
+    # quebra no meio do nome. Candidatos errados só dão 404 na validação.
+    if paper:
+        prefix = re.sub(r"[ _-]+$", "", repo.replace(" ", "")).lower()
+        if len(prefix) >= 4:
+            # nome já contíguo no texto
+            for mm in re.finditer(re.escape(owner) + r"/([\w.-]+)", paper):
+                name = mm.group(1).rstrip(".,);:")
+                if name.lower().startswith(prefix[:4]) and len(name) > len(prefix):
+                    add(f"https://github.com/{owner}/{name}")
+            # nome cortado por UMA quebra (\n ou espaço) — junta os dois pedaços
+            for mm in re.finditer(re.escape(owner) + r"/([\w.-]+[ \t\n]+[\w.-]+)", paper):
+                name = re.sub(r"\s+", "", mm.group(1)).rstrip(".,);:")
+                if name.lower().startswith(prefix[:4]):
+                    add(f"https://github.com/{owner}/{name}")
+    return out
+
+
+def _repo_exists(url: str) -> bool:
+    """True se a URL do repo responde 200 (segue redirect http->https)."""
+    try:
+        r = httpx.head(url, follow_redirects=True, timeout=10)
+        if r.status_code == 405:  # GitHub às vezes recusa HEAD
+            r = httpx.get(url, follow_redirects=True, timeout=10)
+        return r.status_code == 200
+    except Exception:
+        return False
+
+
+def resolve_repo_url(url: str, paper: str = "") -> Optional[str]:
+    """Normaliza + valida a URL do repo contra o GitHub, testando variantes de
+    URLs quebradas. Retorna a primeira que existe, ou None se nenhuma existe
+    (repo genuinamente ausente, não bug de extração)."""
+    if not url:
+        return None
+    for cand in _repo_variants(url, paper):
+        if _repo_exists(cand):
+            return cand
+    return None
 
 
 @dataclass

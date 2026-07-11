@@ -79,7 +79,10 @@ def route_to_reviewers(state: ReviewState) -> list[Send]:
     if os.getenv("REDINK_REPRO") and "reproducibility" in clf.dimensions:
         repo_url = _repro_url(state)
         if repo_url:
-            sends.append(Send("repro_check", {"code_repo": repo_url}))
+            sends.append(Send("repro_check", {
+                "code_repo": repo_url,
+                "paper": state["paper"],  # p/ reconstruir URLs quebradas no PDF
+            }))
     return sends
 
 

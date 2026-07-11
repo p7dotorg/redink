@@ -5,7 +5,9 @@ from dataclasses import asdict
 
 from langchain_core.runnables import RunnableConfig
 
-from redink_core.repro import ReproResult, docker_available, run_repro_check
+from redink_core.repro import (
+    ReproResult, docker_available, resolve_repo_url, run_repro_check,
+)
 from redink_core.schemas import Finding
 
 # status → (severity, texto do issue). 'ok'/'no_docker' não emitem finding.
@@ -42,11 +44,19 @@ def _to_finding(r: ReproResult) -> Finding:
 def repro_check(state, config: RunnableConfig = None):
     """Clona+instala+importa o repo do paper num sandbox; emite Finding grounded
     só em caso de falha. Em sucesso, só registra repro_result pro veredito."""
-    repo_url = state.get("code_repo")
-    if not repo_url:
+    raw_url = state.get("code_repo")
+    if not raw_url:
         return {"findings": [], "repro_result": {"status": "no_docker", "skipped": True}}
     if not docker_available():
-        return {"findings": [], "repro_result": {"status": "no_docker", "repo_url": repo_url}}
+        return {"findings": [], "repro_result": {"status": "no_docker", "repo_url": raw_url}}
+
+    # Normaliza+valida a URL contra o GitHub (URLs de paper vêm quebradas do
+    # PDF: http, truncadas, hífen->espaço). Só clonamos o que existe.
+    repo_url = resolve_repo_url(raw_url, state.get("paper", ""))
+    if not repo_url:
+        result = ReproResult("repo_missing", raw_url,
+                             log="URL do repo não resolve pra um repositório existente no GitHub")
+        return {"findings": [_to_finding(result)], "repro_result": asdict(result)}
 
     result = run_repro_check(repo_url)
     repro_result = asdict(result)

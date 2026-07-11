@@ -6,8 +6,9 @@ from redink_core.repro import ReproResult
 STATE = {"code_repo": "https://github.com/foo/bar"}
 
 
-def _run(result=None, docker=True):
+def _run(result=None, docker=True, resolved="https://github.com/foo/bar"):
     with patch("redink_core.nodes_repro.docker_available", return_value=docker), \
+         patch("redink_core.nodes_repro.resolve_repo_url", return_value=resolved), \
          patch("redink_core.nodes_repro.run_repro_check", return_value=result):
         return repro_check(STATE)
 
@@ -55,3 +56,11 @@ def test_no_code_repo_skips():
     out = repro_check({})
     assert out["findings"] == []
     assert out["repro_result"]["status"] == "no_docker" or out["repro_result"].get("skipped")
+
+
+def test_unresolvable_url_is_repo_missing():
+    # resolve_repo_url retorna None -> repo genuinamente ausente, sem clonar
+    out = _run(result=None, resolved=None)
+    assert out["repro_result"]["status"] == "repo_missing"
+    assert out["findings"][0].severity == "critical"
+    assert out["findings"][0].grounded is True
