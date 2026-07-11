@@ -20,7 +20,25 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["langgraph-cli>=0.1.0"]
+dev = ["langgraph-cli>=0.1.0", "pytest>=8"]
+# podcast generation (paper -> episode). Opt-in: `uv sync --extra pod`.
+# Heavy + only needed for /podcast, so kept out of the base install.
+pod = [
+    "langchain-community>=0.3",
+    "pyyaml>=6.0",
+    "pymupdf>=1.24",
+    "beautifulsoup4>=4.12",
+    "requests>=2.31",
+    "pydub>=0.25",
+    "arxiv>=2.0",
+    "faiss-cpu>=1.7",
+    "tavily-python>=0.3",
+    "soundfile>=0.13",
+    "piper-tts>=1.4",       # local PT-BR TTS (default, CPU, no key)
+    "mistralai>=1.0",       # Voxtral premium TTS (opt-in, needs MISTRAL_API_KEY)
+    "elevenlabs>=2.49",     # optional premium TTS
+    "openai>=1.0",          # optional OpenAI TTS
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["redink_core"]

@@ -46,6 +46,15 @@ class Classification(BaseModel):
             "Inclua: nome do método/sistema, componentes técnicos, benchmarks, métricas, baselines comparados."
         )
     )
+    code_repo: Optional[str] = Field(
+        default=None,
+        description=(
+            "URL do repositório de código OFICIAL do paper (o que os autores "
+            "publicaram: 'code/implementation available at github.com/...'). "
+            "NÃO é um repo citado como baseline ou dataset de terceiros. "
+            "null se o paper não linka repositório próprio."
+        ),
+    )
 
 
 class Finding(BaseModel):
@@ -67,6 +76,14 @@ class Finding(BaseModel):
     defense: Optional[str] = Field(
         default=None,
         description="Melhor argumento da defesa do autor durante o debate"
+    )
+    grounded: bool = Field(
+        default=False,
+        description=(
+            "True se o finding foi verificado por EXECUÇÃO (repro_check rodou "
+            "o código). Findings grounded bypassam o debate adversarial e a "
+            "dedup — um fato de execução não é argumentável."
+        ),
     )
 
 
