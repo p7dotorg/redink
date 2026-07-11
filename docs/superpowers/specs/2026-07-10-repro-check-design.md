@@ -176,3 +176,29 @@ sozinho quando há `code_repo` e `reproducibility` é dimensão.
 Ganho de recall mensurável no `eval/`: findings de execução que a heurística de
 texto não pega (ou pega com baixa confiança), sem introduzir falso-FAIL — o teto
 `major` protege contra punir o paper por lacuna do harness.
+
+## Addendum de validação (2026-07-10) — ESCOPO REAL
+
+Rodado com Docker de verdade contra amostra do ASAP (ICLR 2018-2020). Números:
+
+- **Cobertura:** 32% (95/300) dos papers linkam um repo GitHub real; 68% não têm
+  código → repro_check pula (correto, sem finding).
+- **Desfecho (amostra de 12 papers-com-repo, duas rodadas):** **0/12 `ok`.**
+  Breakdown: install_fail 7 · no_official_repo 3 · repo_missing 1 · import_fail 1.
+
+**Conclusão dura:** o modelo v1 (`pip install .` + `import`) **só produz `ok`
+quando o produto do paper É um pacote pip** (ex: requests, umap-learn — ambos
+deram `ok`). O paper de MÉTODO típico (ICLR) tem repo de scripts (`python
+train.py`), sem `setup.py`/`requirements.txt` na raiz → `install_fail` (exit 30).
+
+**Escopo honesto pra produção:** o `repro_check` v1 é valioso pra
+papers-biblioteca/ferramenta/benchmark, **não** pra papers-método. Fica opt-in
+(`REDINK_REPRO`, default off). Vender como "verifica papers que shippam pacote",
+não "roda qualquer paper".
+
+**O que destravaria o caso método (v2, não feito):** trocar o smoke-test de
+"pip install" por "detecta entrypoint (`train.py`/comando do README) + instala
+deps de onde estiverem + importa a fonte do repo dir sem exigir pacote". Isso é
+inferência de deps/entrypoint (agêntico), não tweak. NÃO investir mais em parsing
+de URL — é cauda longa que não move o `ok` (o fix de `resolve_repo_url` derrubou
+`repo_missing` 3→1 mas manteve `ok` em 0).
