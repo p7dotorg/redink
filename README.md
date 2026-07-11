@@ -45,6 +45,8 @@ paper.md / GitHub URL / arXiv URL
    ▼  fan-out via Send — 3 personas × N dimensions
  [reviewer] × N     skeptic · practitioner · academic, different priors each
  [figure_reviewer]  Gemini Vision on ar5iv figures (cherry-picking, truncated axes)
+ [repro_check]      OPT-IN (REDINK_REPRO): clones the paper's repo into a
+                    network-blocked Docker sandbox, checks it installs + imports
    │
    ▼
  [debate]           dedup, then every CRITICAL faces a defender (argues the
@@ -162,6 +164,8 @@ Every model and key is configurable via `/config papers|datasets`, `redink setup
 
 Estimated cost per review: **~$0.10** — mostly the gpt-4o judge panel. Set `JUDGE_MODEL=gpt-4o-mini` for ~$0.03.
 
+Set `REDINK_REPRO=1` (requires Docker) to enable execution verification — see *Execution verification* below.
+
 ## How it works — details
 
 **Citation verification.** Only the *skeptic* persona makes web requests (all three in parallel would exhaust the Semantic Scholar rate limit). Tools: `search_papers` (Semantic Scholar, cross-disciplinary), `get_paper` (arXiv abstract), `verify_doi` (Crossref). A finding's `evidence` quote is checked against the paper text — an unverifiable quote drops the finding to `minor`, killing hallucinations.
@@ -169,6 +173,8 @@ Estimated cost per review: **~$0.10** — mostly the gpt-4o judge panel. Set `JU
 **Novelty search.** The classify node extracts 5–8 `subject+verb+object` claims that become specific arXiv queries. Results published **after** the paper under review are filtered out in code — no more 2024 papers cited as prior work for a 2017 paper.
 
 **Fetch & truncation.** arXiv is fetched via ar5iv with `<table>` preserved as pipe rows and `<math>` as LaTeX. Reviewers get up to 60k chars with an explicit excerpt notice, so "missing" sections in the omitted tail are never reported as flaws. Abstract-only renders (ar5iv failures) are detected and flagged.
+
+**Execution verification (opt-in).** With `REDINK_REPRO=1` and Docker running, a `repro_check` node clones the paper's linked repo into an ephemeral, network-blocked sandbox (`python:3.11`, `--memory=2g`, 180s cap) and checks it **installs + imports**. The result is a *grounded* finding — real `pip`/import output, immune to the adversarial debate — and the verdict states whether the code actually ran. Off by default. The repo URL is normalized and validated against GitHub before cloning (PDF text mangles URLs: `http`, line-wrap truncation, hyphen→space). **Scope, honestly:** measured on the ASAP set, this only reaches `ok` for papers that ship a pip package (libraries, tools, benchmarks) — the typical method paper's script-repo has no `setup.py` and isn't pip-installable, so treat this as a *package-paper* check, not a "runs any paper" claim. Full numbers and the v2 direction (entrypoint smoke-test) are in the [design doc](docs/superpowers/specs/2026-07-10-repro-check-design.md).
 
 ## Data & privacy
 
