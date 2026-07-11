@@ -191,6 +191,23 @@ def judge_panel(state, config: RunnableConfig = None):
     return {"judge_votes": JudgePanel(votes=votes, verdict=verdict)}
 
 
+_REPRO_LINE = {
+    "ok": "✅ Reprodutibilidade (executado): o código do repositório foi baixado, instala e importa.",
+    "install_fail": "❌ Reprodutibilidade (executado): o código foi baixado mas NÃO instala.",
+    "import_fail": "❌ Reprodutibilidade (executado): o código instala mas o import quebra.",
+    "repo_missing": "❌ Reprodutibilidade (executado): o repositório linkado não existe ou está vazio.",
+    "timeout": "⚠️ Reprodutibilidade (executado): a instalação/import passou do tempo limite.",
+}
+
+
+def _repro_summary_line(repro) -> str:
+    """Linha factual pro veredito quando o repro_check rodou. '' se não deve
+    aparecer (Docker indisponível, sem repo, ou repro_check não rodou)."""
+    if not repro:
+        return ""
+    return _REPRO_LINE.get(repro.get("status", ""), "")
+
+
 def synthesize(state, config: RunnableConfig = None):
     clf = state["classification"]
     c_map = state.get("contradiction_map")
@@ -258,10 +275,14 @@ def synthesize(state, config: RunnableConfig = None):
         )),
     ])
 
-    return {"verdict": Verdict(
+    verdict = Verdict(
         status=status, summary=summary.content,
         critical_count=len(critical), major_count=len(major), minor_count=len(minor),
         findings=sorted(findings, key=lambda f: _SEV_RANK[f.severity]),
         contradiction_map=c_map, blind_spots=b_spots, judge_panel=panel,
         high_confidence_issues=high_confidence,
-    )}
+    )
+    repro_line = _repro_summary_line(state.get("repro_result"))
+    if repro_line:
+        verdict.summary = repro_line + "\n\n" + verdict.summary
+    return {"verdict": verdict}
