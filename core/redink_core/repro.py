@@ -115,10 +115,9 @@ def run_repro_check(repo_url: str, *, timeout: int = 180,
     try:
         rc1, out1 = _docker_run(
             _run_args(volume, "bridge", _PHASE1, repo_url, mem, cpus), timeout)
+        # exit 10 = git clone falhou; 20 = pip install falhou; 30 = sem manifesto
         if rc1 == 10:
             return ReproResult("repo_missing", repo_url, log=out1)
-        if rc1 in (20, 30):
-            return ReproResult("install_fail", repo_url, log=out1)
         if rc1 != 0:
             return ReproResult("install_fail", repo_url, log=out1)
 
