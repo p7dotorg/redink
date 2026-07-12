@@ -42,13 +42,13 @@ paper.md / GitHub URL / arXiv URL
    ▼
  [classify]         area · type · dimensions · citations · 5–8 technical claims
    │
-   ▼  fan-out via Send — 3 personas × N dimensions
- [reviewer] × N     skeptic · practitioner · academic, different priors each
- [figure_reviewer]  Gemini Vision on ar5iv figures (cherry-picking, truncated axes)
- [repro_check]      OPT-IN (REDINK_REPRO): clones the paper's repo into a
-                    network-blocked Docker sandbox, checks it installs + imports
+   │  fan-out via Send — 3 personas × N dimensions
+   ├─▶ [reviewer] × N      skeptic · practitioner · academic, different priors each
+   ├─▶ [figure_reviewer]   Gemini Vision on ar5iv figures (cherry-picking, truncated axes)
+   └─▶ [repro_check] ⚙     OPT-IN (REDINK_REPRO): clones the paper's linked repo into a
+                           network-blocked Docker sandbox, checks it installs + imports
    │
-   ▼
+   ▼  (branches rejoin)
  [debate]           dedup, then every CRITICAL faces a defender (argues the
                     author's side from the text) + a judge → sustained /
                     downgraded / dismissed. Kills criticals nobody can defend
