@@ -1,0 +1,40 @@
+name: Risco
+
+# Classifica o PR por regra fixa (sem LLM). risco:alto sempre exige revisão humana.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  risco:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Classificar
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          files=$(gh pr view "$PR" -R "$REPO" --json files --jq '.files[].path')
+          linhas=$(gh pr view "$PR" -R "$REPO" --json additions,deletions --jq '.additions + .deletions')
+          motivo=""
+          has() { echo "$files" | grep -qiE "$1"; }
+          has '^\.github/'                                   && motivo="$motivo CI;"
+          has '(^|/)\.env'                                   && motivo="$motivo env;"
+          has 'auth|token|secret|credential|\.mcp\.json'     && motivo="$motivo credenciais;"
+          has '(^|/)(pyproject\.toml|uv\.lock)$|^langgraph\.json$' && motivo="$motivo dependências/grafo;"
+          has '^core/redink_core/(prompts|reviewer_prompts|schemas|reviewers|nodes_reviewer|nodes_debate|nodes_synthesis|nodes_classify)\.py$' && motivo="$motivo veredito (medir com eval/);"
+          has '^core/redink_core/(repro|nodes_repro)\.py$'   && motivo="$motivo execução de código de terceiros;"
+          has '^eval/'                                       && motivo="$motivo harness de medição;"
+          has '^SECURITY\.md$'                               && motivo="$motivo política de segurança;"
+          [ "$linhas" -gt 300 ]                              && motivo="$motivo diff de $linhas linhas;"
+          if [ -n "$motivo" ]; then add=risco:alto; rm=risco:baixo; else add=risco:baixo; rm=risco:alto; fi
+          echo "### $add${motivo:+ —$motivo}" >> "$GITHUB_STEP_SUMMARY"
+          # PR de fork recebe token só-leitura: a etiqueta não é aplicada, o resumo acima fica.
+          gh pr edit "$PR" -R "$REPO" --add-label "$add" --remove-label "$rm" 2>/dev/null \
+            || gh pr edit "$PR" -R "$REPO" --add-label "$add" 2>/dev/null \
+            || echo "sem permissão para etiquetar (fork?): $add"
